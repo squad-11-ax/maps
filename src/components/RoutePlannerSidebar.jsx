@@ -1,144 +1,427 @@
+import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { 
+  ArrowUpDown, 
+  X, 
+  Navigation, 
+  MapPin, 
+  Accessibility, 
+  Footprints, 
+  CheckCircle2, 
+  ArrowUp, 
+  ArrowLeft, 
+  ArrowRight, 
+  CornerUpRight,
+  Play,
+  RotateCcw,
+  Search,
+  Check
+} from 'lucide-react';
+import { NODES } from '../data/nodesData';
 import './RoutePlannerSidebar.css';
 
-export default function RoutePlannerSidebar({ routePlanner, currentStepIndex, onNext, onPrev }) {
+export default function RoutePlannerSidebar({
+  startNodeId,
+  endNodeId,
+  onChangeStart,
+  onChangeEnd,
+  onSwap,
+  routeSteps = [],
+  currentStepIndex = 0,
+  onSelectStep,
+  onNextStep,
+  onPrevStep,
+  isNavigating = false,
+  onStartNavigation,
+  onStopNavigation,
+  stepFreeOnly = false,
+  onToggleStepFree,
+  onCloseDirections
+}) {
+  const [activeInput, setActiveInput] = useState(null); // 'start' | 'dest' | null
+  const [startQuery, setStartQuery] = useState('');
+  const [destQuery, setDestQuery] = useState('');
+  const sidebarRef = useRef(null);
+
+  // Derived selected nodes
+  const startNode = useMemo(() => NODES.find(n => n.id === startNodeId), [startNodeId]);
+  const endNode = useMemo(() => NODES.find(n => n.id === endNodeId), [endNodeId]);
+
+  // Sync inputs with selected nodes
+  useEffect(() => {
+    if (startNodeId === 'user_location') {
+      setStartQuery('Your location');
+    } else if (startNode) {
+      setStartQuery(startNode.name);
+    }
+  }, [startNode, startNodeId]);
+
+  useEffect(() => {
+    if (endNode) {
+      setDestQuery(endNode.name);
+    }
+  }, [endNode]);
+
+  // Close dropdown on click outside
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (sidebarRef.current && !sidebarRef.current.contains(e.target)) {
+        setActiveInput(null);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Filter autocomplete options
+  const filterNodes = (queryText) => {
+    const q = (queryText || '').trim().toLowerCase();
+    if (!q) return NODES.slice(0, 6);
+
+    return NODES.filter((n) => {
+      if (n.name.toLowerCase().includes(q)) return true;
+      if (n.shortName && n.shortName.toLowerCase().includes(q)) return true;
+      if (n.blockCode && n.blockCode.toLowerCase().includes(q)) return true;
+      if (n.aliases && n.aliases.some(a => a.toLowerCase().includes(q))) return true;
+      return false;
+    }).slice(0, 6);
+  };
+
+  const startSuggestions = useMemo(() => filterNodes(startQuery), [startQuery]);
+  const destSuggestions = useMemo(() => filterNodes(destQuery), [destQuery]);
+
+  // Total summary calculations
+  const totalMeters = useMemo(() => {
+    return routeSteps.reduce((acc, step) => acc + (step.distanceMeters || 0), 0);
+  }, [routeSteps]);
+
+  const totalMinutes = useMemo(() => {
+    return Math.max(1, Math.round(totalMeters / 75)); // ~75 meters/minute walking
+  }, [totalMeters]);
+
+  const getStepIcon = (direction) => {
+    switch (direction) {
+      case 'left':
+        return <ArrowLeft size={18} aria-hidden="true" />;
+      case 'right':
+        return <ArrowRight size={18} aria-hidden="true" />;
+      case 'arrive':
+        return <MapPin size={18} className="arrive-icon" aria-hidden="true" />;
+      case 'start':
+        return <Footprints size={18} className="start-icon" aria-hidden="true" />;
+      default:
+        return <ArrowUp size={18} aria-hidden="true" />;
+    }
+  };
+
   return (
-    <div className="left" style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: '15px' }}>
-      
-      {/* Upper Container (40% height) */}
-      <div className="up search-route-card" style={{ height: '40%', background: 'white', borderRadius: '12px', boxShadow: '0 4px 16px rgba(0,0,0,0.1)', padding: '20px', boxSizing: 'border-box', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-        <div className="route-inputs-container">
-          {/* Left Icons Column */}
-          <div className="route-icons">
-            <div className="icon-row top-icon-row">
-              <span className="drag-icon">⠿</span>
-              <span className="circle-icon"></span>
-            </div>
-            <div className="dots-row">
-              <span className="vertical-dots">⋮</span>
-            </div>
-            <div className="icon-row bottom-icon-row">
-              <span className="pin-icon">
-                <span className="pin-inner-dot"></span>
-              </span>
-            </div>
-          </div>
-
-          {/* Middle Inputs Column */}
-          <div className="route-inputs">
-            <div className="input-box start-box">
-              <input 
-                type="text" 
-                placeholder="Choose starting point, or click on the map" 
-                defaultValue="Main Entrance"
-              />
-              <span className="search-icon">🔍</span>
-            </div>
-            
-            <div className="input-box dest-box">
-              <input 
-                type="text" 
-                placeholder="Choose destination..." 
-                defaultValue="Sarasawti Library"
-              />
-            </div>
-          </div>
-
-          {/* Right Swap Column */}
-          <div className="route-swap">
-            <button className="swap-btn" title="Reverse starting point and destination">
-              ⇅
-            </button>
-          </div>
+    <div className="unified-directions-panel" ref={sidebarRef} role="region" aria-label="Route Planner and Directions">
+      {/* Panel Header */}
+      <div className="directions-panel-header">
+        <div className="header-title-wrap">
+          <Navigation size={20} className="header-icon" aria-hidden="true" />
+          <h2 className="header-title">Directions</h2>
         </div>
+        {onCloseDirections && (
+          <button
+            type="button"
+            className="directions-close-btn"
+            onClick={onCloseDirections}
+            aria-label="Close directions panel"
+          >
+            <X size={18} aria-hidden="true" />
+          </button>
+        )}
       </div>
 
-      {/* Lower Container (60% height) */}
-      <div className="down" style={{ height: '60%', background: 'white', borderRadius: '12px', boxShadow: '0 4px 16px rgba(0,0,0,0.1)', padding: '20px', boxSizing: 'border-box', display: 'flex', flexDirection: 'column' }}>
-        <h4 style={{ margin: '0 0 15px 0', fontSize: '16px', color: '#333' }}>Navigation Steps</h4>
-        
-        <div style={{ flexGrow: 1, overflowY: 'hidden', position: 'relative' }}>
-          {routePlanner.map((step, index) => {
+      {/* From / To Search Inputs and Swap Button */}
+      <div className="directions-inputs-section">
+        <div className="inputs-column">
+          {/* Start Input */}
+          <div className="input-field-wrapper">
+            <div className="input-icon-indicator start-indicator" aria-hidden="true">
+              <div className="origin-dot" />
+            </div>
+            <input
+              type="text"
+              className="direction-text-input"
+              placeholder="Choose starting point"
+              value={startQuery}
+              onChange={(e) => {
+                setStartQuery(e.target.value);
+                setActiveInput('start');
+              }}
+              onFocus={() => setActiveInput('start')}
+              aria-label="Starting location"
+              aria-autocomplete="list"
+            />
+            {startQuery && (
+              <button
+                type="button"
+                className="input-clear-btn"
+                onClick={() => {
+                  setStartQuery('');
+                  onChangeStart('');
+                  setActiveInput('start');
+                }}
+                aria-label="Clear starting point"
+              >
+                <X size={16} aria-hidden="true" />
+              </button>
+            )}
+
+            {/* Start Autocomplete Suggestions */}
+            {activeInput === 'start' && (
+              <div className="autocomplete-flyout" role="listbox">
+                <button
+                  type="button"
+                  className="flyout-item special-location-item"
+                  onClick={() => {
+                    onChangeStart('PointA');
+                    setStartQuery('Your location');
+                    setActiveInput(null);
+                  }}
+                >
+                  <div className="flyout-icon-wrap user-loc-icon">
+                    <Footprints size={16} />
+                  </div>
+                  <div className="flyout-text">
+                    <span className="flyout-title">Your location</span>
+                    <span className="flyout-subtitle">Current campus location (Main Center)</span>
+                  </div>
+                </button>
+                {startSuggestions.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className="flyout-item"
+                    onClick={() => {
+                      onChangeStart(item.id);
+                      setStartQuery(item.name);
+                      setActiveInput(null);
+                    }}
+                  >
+                    <div className="flyout-icon-wrap">
+                      <MapPin size={16} />
+                    </div>
+                    <div className="flyout-text">
+                      <span className="flyout-title">{item.name}</span>
+                      <span className="flyout-subtitle">{item.subtitle || item.blockCode}</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Destination Input */}
+          <div className="input-field-wrapper">
+            <div className="input-icon-indicator dest-indicator" aria-hidden="true">
+              <MapPin size={16} className="dest-pin-icon" />
+            </div>
+            <input
+              type="text"
+              className="direction-text-input"
+              placeholder="Choose destination"
+              value={destQuery}
+              onChange={(e) => {
+                setDestQuery(e.target.value);
+                setActiveInput('dest');
+              }}
+              onFocus={() => setActiveInput('dest')}
+              aria-label="Destination location"
+              aria-autocomplete="list"
+            />
+            {destQuery && (
+              <button
+                type="button"
+                className="input-clear-btn"
+                onClick={() => {
+                  setDestQuery('');
+                  onChangeEnd('');
+                  setActiveInput('dest');
+                }}
+                aria-label="Clear destination"
+              >
+                <X size={16} aria-hidden="true" />
+              </button>
+            )}
+
+            {/* Destination Autocomplete Suggestions */}
+            {activeInput === 'dest' && (
+              <div className="autocomplete-flyout" role="listbox">
+                {destSuggestions.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className="flyout-item"
+                    onClick={() => {
+                      onChangeEnd(item.id);
+                      setDestQuery(item.name);
+                      setActiveInput(null);
+                    }}
+                  >
+                    <div className="flyout-icon-wrap">
+                      <MapPin size={16} />
+                    </div>
+                    <div className="flyout-text">
+                      <span className="flyout-title">{item.name}</span>
+                      <span className="flyout-subtitle">{item.subtitle || item.blockCode}</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Reverse / Swap Button (>= 44x44px target) */}
+        <button
+          type="button"
+          className="route-swap-btn"
+          onClick={onSwap}
+          aria-label="Reverse starting point and destination"
+          title="Reverse starting point and destination"
+        >
+          <ArrowUpDown size={18} aria-hidden="true" />
+        </button>
+      </div>
+
+      {/* Route Options & Accessibility Filter */}
+      <div className="route-options-row">
+        <label className="step-free-toggle" htmlFor="step-free-checkbox">
+          <input
+            id="step-free-checkbox"
+            type="checkbox"
+            checked={stepFreeOnly}
+            onChange={(e) => onToggleStepFree(e.target.checked)}
+            className="step-free-input"
+          />
+          <span className="toggle-switch-ui" aria-hidden="true" />
+          <div className="toggle-label-content">
+            <Accessibility size={16} className="a11y-icon" aria-hidden="true" />
+            <span className="toggle-text">Step-free route</span>
+          </div>
+        </label>
+        {stepFreeOnly && (
+          <span className="step-free-active-tag">Accessible</span>
+        )}
+      </div>
+
+      {/* Route Summary Header */}
+      {routeSteps.length > 0 ? (
+        <div className="route-summary-bar">
+          <div className="summary-main">
+            <Footprints size={20} className="walking-icon" aria-hidden="true" />
+            <div className="summary-metrics">
+              <span className="summary-duration">{totalMinutes} min</span>
+              <span className="summary-divider">•</span>
+              <span className="summary-distance">{totalMeters} m</span>
+            </div>
+          </div>
+          <button
+            type="button"
+            className={`navigation-start-btn ${isNavigating ? 'active' : ''}`}
+            onClick={isNavigating ? onStopNavigation : onStartNavigation}
+            aria-label={isNavigating ? 'Exit live navigation' : 'Start live turn-by-turn navigation'}
+          >
+            {isNavigating ? (
+              <>
+                <RotateCcw size={16} aria-hidden="true" />
+                <span>Exit</span>
+              </>
+            ) : (
+              <>
+                <Play size={16} aria-hidden="true" />
+                <span>Start</span>
+              </>
+            )}
+          </button>
+        </div>
+      ) : (
+        <div className="no-route-alert">
+          <p className="no-route-text">No route found between selected points.</p>
+          <p className="no-route-hint">Try selecting a different entrance or accessible node.</p>
+        </div>
+      )}
+
+      {/* Navigation Steps List */}
+      <div className="steps-scroll-container">
+        <h3 className="steps-section-heading">Step-by-Step Guidance</h3>
+        <ol className="steps-timeline-list">
+          {routeSteps.map((step, index) => {
+            const isCompleted = index < currentStepIndex;
             const isCurrent = index === currentStepIndex;
-            const isNext = index === currentStepIndex + 1;
-            
-            let dir = 'Go Straight';
-            let arrow = '↑';
-            const lowerInst = step.instruction.toLowerCase();
-            if (lowerInst.includes('left')) { dir = 'Turn Left'; arrow = '←'; }
-            else if (lowerInst.includes('right')) { dir = 'Turn Right'; arrow = '→'; }
-            else if (lowerInst.includes('arrive') || lowerInst.includes('reach')) { dir = 'Arrive'; arrow = '📍'; }
-            else if (lowerInst.includes('start')) { dir = 'Start'; arrow = '🚶'; }
+            const isUpcoming = index > currentStepIndex;
 
             return (
-              <div
+              <li
                 key={index}
-                style={{
-                  padding: isCurrent || isNext ? '15px' : '0px 15px',
-                  margin: isCurrent || isNext ? '0 0 12px 0' : '0',
-                  backgroundColor: isCurrent ? '#fff' : '#f8f9fa',
-                  borderRadius: '10px',
-                  border: isCurrent ? '2px solid #1a73e8' : '2px solid transparent',
-                  opacity: isCurrent ? 1 : (isNext ? 0.4 : 0),
-                  maxHeight: isCurrent ? '200px' : (isNext ? '65px' : '0px'),
-                  overflow: 'hidden',
-                  transition: 'all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1)',
-                  boxShadow: isCurrent ? '0 6px 16px rgba(26, 115, 232, 0.15)' : 'none',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '8px'
+                className={`step-timeline-item ${isCurrent ? 'current' : ''} ${isCompleted ? 'completed' : ''} ${isUpcoming ? 'upcoming' : ''}`}
+                onClick={() => onSelectStep(index)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    onSelectStep(index);
+                  }
                 }}
+                aria-current={isCurrent ? 'step' : undefined}
+                aria-label={`Step ${index + 1}: ${step.instruction}, ${step.distanceMeters} meters`}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontWeight: 'bold', fontSize: '18px', color: isCurrent ? '#1a73e8' : '#555', whiteSpace: 'nowrap' }}>
-                  <span style={{ fontSize: '22px' }}>{arrow}</span>
-                  <span>{dir}</span>
+                <div className="step-icon-column">
+                  <div className="step-icon-bubble">
+                    {isCompleted ? (
+                      <Check size={16} className="check-icon" aria-hidden="true" />
+                    ) : (
+                      getStepIcon(step.direction)
+                    )}
+                  </div>
+                  {index < routeSteps.length - 1 && (
+                    <div className="step-timeline-connector" aria-hidden="true" />
+                  )}
                 </div>
-                <div style={{ fontSize: '14px', color: '#666', lineHeight: '1.4' }}>
-                  {step.instruction}
+
+                <div className="step-content">
+                  <span className="step-instruction">{step.instruction}</span>
+                  {step.distanceMeters > 0 && (
+                    <span className="step-meta">
+                      {step.distanceMeters} m • ~{Math.max(1, Math.round(step.distanceMeters / 75))} min
+                    </span>
+                  )}
                 </div>
-              </div>
+
+                {isCurrent && (
+                  <span className="current-step-badge" aria-hidden="true">
+                    Next
+                  </span>
+                )}
+              </li>
             );
           })}
-        </div>
-        
-        {/* Buttons */}
-        <div style={{ display: 'flex', gap: '10px', marginTop: 'auto', paddingTop: '15px' }}>
-          <button 
-            onClick={onPrev}
-            disabled={currentStepIndex === 0}
-            style={{ 
-              flex: 1, 
-              padding: '12px', 
-              backgroundColor: currentStepIndex === 0 ? '#f0f0f0' : '#e8eaed', 
-              color: currentStepIndex === 0 ? '#aaa' : '#333', 
-              border: 'none', 
-              borderRadius: '8px', 
-              cursor: currentStepIndex === 0 ? 'not-allowed' : 'pointer',
-              fontWeight: 'bold',
-              fontSize: '16px',
-              transition: 'background-color 0.2s'
-            }}
-          >
-            Previous
-          </button>
-          <button 
-            onClick={onNext}
-            disabled={currentStepIndex >= routePlanner.length - 1}
-            style={{ 
-              flex: 1, 
-              padding: '12px', 
-              backgroundColor: currentStepIndex >= routePlanner.length - 1 ? '#ccc' : '#1a73e8', 
-              color: 'white', 
-              border: 'none', 
-              borderRadius: '8px', 
-              cursor: currentStepIndex >= routePlanner.length - 1 ? 'not-allowed' : 'pointer',
-              fontWeight: 'bold',
-              fontSize: '16px',
-              transition: 'background-color 0.2s'
-            }}
-          >
-            {currentStepIndex >= routePlanner.length - 1 ? "Arrived" : "Next"}
-          </button>
-        </div>
+        </ol>
+      </div>
+
+      {/* Manual Step Advancement Controls */}
+      <div className="directions-footer-controls">
+        <button
+          type="button"
+          className="step-nav-btn prev-btn"
+          onClick={onPrevStep}
+          disabled={currentStepIndex === 0}
+          aria-label="Go to previous route step"
+        >
+          Previous
+        </button>
+        <button
+          type="button"
+          className="step-nav-btn next-btn"
+          onClick={onNextStep}
+          disabled={currentStepIndex >= routeSteps.length - 1}
+          aria-label={currentStepIndex >= routeSteps.length - 1 ? 'Reached destination' : 'Go to next route step'}
+        >
+          {currentStepIndex >= routeSteps.length - 1 ? 'Arrived' : 'Next Step'}
+        </button>
       </div>
     </div>
   );
