@@ -1,7 +1,8 @@
 {
-  "name": "my-first-react-app",
+  "name": "maps",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
+  "description": "Interactive 3D Campus Maps & Navigation with Admin Node Management",
   "type": "module",
   "scripts": {
     "dev": "vite",
