@@ -68,6 +68,9 @@ export default function GlobalSearchPill({
     const q = query.trim().toLowerCase();
     
     return allPlaces.filter((place) => {
+      // Exclude invisible waypoints from visitor search
+      if (place.isWaypoint) return false;
+
       // Category filter
       if (activeCategory && place.category !== activeCategory) {
         return false;

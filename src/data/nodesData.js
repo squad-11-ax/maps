@@ -766,14 +766,37 @@ export function generateTurnByTurnSteps(nodeList) {
       dirText = 'Turn right towards';
     }
 
+    let instruction;
+    if (curr.isWaypoint) {
+      const upcoming = nodeList.slice(i + 1).find((n) => !n.isWaypoint);
+      const targetLabel = upcoming ? (upcoming.shortName || upcoming.name) : null;
+
+      if (direction === 'left') {
+        instruction = targetLabel
+          ? `Turn left along walkway towards ${targetLabel}`
+          : 'Turn left along walkway';
+      } else if (direction === 'right') {
+        instruction = targetLabel
+          ? `Turn right along walkway towards ${targetLabel}`
+          : 'Turn right along walkway';
+      } else {
+        instruction = targetLabel
+          ? `Follow walkway towards ${targetLabel}`
+          : 'Continue along walkway';
+      }
+    } else {
+      instruction = `${dirText} ${curr.name}`;
+    }
+
     steps.push({
       nodeId: curr.id,
       lat: curr.x,
       lng: curr.y,
-      instruction: `${dirText} ${curr.name}`,
+      instruction,
       direction,
       distanceMeters: legMeters,
       timeSeconds: legSeconds,
+      isWaypoint: Boolean(curr.isWaypoint),
     });
   }
 

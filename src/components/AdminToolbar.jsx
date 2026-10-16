@@ -1,6 +1,7 @@
 import { 
   ShieldCheck, 
   Plus, 
+  Waypoints,
   FileCode, 
   RotateCcw, 
   X, 
@@ -11,8 +12,11 @@ import './AdminToolbar.css';
 
 export default function AdminToolbar({
   nodesCount = 0,
+  placesCount,
+  waypointsCount,
   edgesCount = 0,
   onOpenAddModal,
+  onOpenAddWaypoint,
   onOpenManageModal,
   onOpenExportModal,
   onResetDefaults,
@@ -39,6 +43,9 @@ export default function AdminToolbar({
     );
   }
 
+  const pCount = placesCount != null ? placesCount : nodesCount;
+  const wCount = waypointsCount != null ? waypointsCount : 0;
+
   return (
     <aside className="admin-toolbar-dock" role="region" aria-label="Campus Map Administrator Toolbar">
       <div className="admin-toolbar-inner">
@@ -48,7 +55,7 @@ export default function AdminToolbar({
         </div>
 
         <span className="admin-stats">
-          {nodesCount} places • {edgesCount} walkways
+          {pCount} places{wCount > 0 ? ` • ${wCount} waypoints` : ''} • {edgesCount} walkways
         </span>
 
         <div className="admin-actions-group">
@@ -56,7 +63,7 @@ export default function AdminToolbar({
             type="button"
             className="admin-btn admin-btn-primary"
             onClick={onOpenAddModal}
-            title="Create and place a new node on campus"
+            title="Create and place a new destination place on campus"
           >
             <Plus size={15} aria-hidden="true" />
             <span>Add Place</span>
@@ -64,12 +71,22 @@ export default function AdminToolbar({
 
           <button
             type="button"
+            className="admin-btn admin-btn-waypoint"
+            onClick={onOpenAddWaypoint}
+            title="Drop an invisible corner-bending waypoint on walkway paths"
+          >
+            <Waypoints size={15} aria-hidden="true" />
+            <span>Add Waypoint</span>
+          </button>
+
+          <button
+            type="button"
             className="admin-btn admin-btn-outline"
             onClick={onOpenManageModal}
-            title="Rename, edit, or remove existing nodes"
+            title="Rename, edit, or remove existing nodes & waypoints"
           >
             <ListOrdered size={15} aria-hidden="true" />
-            <span>Manage & Rename</span>
+            <span>Manage</span>
           </button>
 
           <button

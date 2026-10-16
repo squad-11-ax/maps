@@ -117,14 +117,15 @@ export function addNode(nodeData, connectedNodeIds = []) {
 
   const newNode = {
     id: finalId,
-    name: (nodeData.name || 'New Campus Location').trim(),
-    shortName: (nodeData.shortName || nodeData.name || 'New Place').trim(),
-    category: nodeData.category || 'Gates',
+    name: (nodeData.name || (nodeData.isWaypoint ? 'Walkway Waypoint' : 'New Campus Location')).trim(),
+    shortName: (nodeData.shortName || nodeData.name || (nodeData.isWaypoint ? 'Waypoint' : 'New Place')).trim(),
+    category: nodeData.category || (nodeData.isWaypoint ? 'Waypoint' : 'Gates'),
     blockCode: (nodeData.blockCode || '').trim(),
     subtitle: (nodeData.subtitle || '').trim(),
     departments: (nodeData.departments || '').trim(),
-    hours: (nodeData.hours || '24/7 Open').trim(),
+    hours: (nodeData.hours || (nodeData.isWaypoint ? 'Always Accessible' : '24/7 Open')).trim(),
     stepFree: nodeData.stepFree !== false,
+    isWaypoint: Boolean(nodeData.isWaypoint),
     aliases: Array.isArray(nodeData.aliases)
       ? nodeData.aliases
       : (nodeData.aliases || '')
@@ -178,6 +179,7 @@ export function updateNode(id, fields, connectedNodeIds = null) {
     departments: fields.departments != null ? String(fields.departments).trim() : existing.departments,
     hours: fields.hours != null ? String(fields.hours).trim() : existing.hours,
     stepFree: fields.stepFree !== undefined ? Boolean(fields.stepFree) : existing.stepFree,
+    isWaypoint: fields.isWaypoint !== undefined ? Boolean(fields.isWaypoint) : Boolean(existing.isWaypoint),
     x: fields.x != null ? Number(Number(fields.x).toFixed(3)) : existing.x,
     y: fields.y != null ? Number(Number(fields.y).toFixed(3)) : existing.y,
     z: existing.z || 0.02,
@@ -270,6 +272,8 @@ export function exportDatabaseJSON(nodes, edges) {
       exportedAt: new Date().toISOString(),
       stats: {
         totalNodes: nodes.length,
+        placesCount: nodes.filter((n) => !n.isWaypoint).length,
+        waypointsCount: nodes.filter((n) => n.isWaypoint).length,
         totalEdges: edges.length,
         totalCategories: CATEGORIES.length,
       },
@@ -327,6 +331,7 @@ CREATE TABLE IF NOT EXISTS campus_nodes (
   departments TEXT,
   hours VARCHAR(128) DEFAULT '24/7 Open',
   step_free BOOLEAN DEFAULT TRUE,
+  is_waypoint BOOLEAN DEFAULT FALSE, -- True for invisible path-correction bends and walkway junctions
   aliases JSONB, -- For MySQL/SQLite, use JSON or TEXT
   x_coord DOUBLE PRECISION NOT NULL,
   y_coord DOUBLE PRECISION NOT NULL,
@@ -349,6 +354,7 @@ CREATE TABLE IF NOT EXISTS campus_edges (
 -- Performance Indexes
 CREATE INDEX IF NOT EXISTS idx_campus_nodes_category ON campus_nodes(category_id);
 CREATE INDEX IF NOT EXISTS idx_campus_nodes_coords ON campus_nodes(x_coord, y_coord);
+CREATE INDEX IF NOT EXISTS idx_campus_nodes_waypoint ON campus_nodes(is_waypoint);
 CREATE INDEX IF NOT EXISTS idx_campus_edges_from ON campus_edges(from_node_id);
 CREATE INDEX IF NOT EXISTS idx_campus_edges_to ON campus_edges(to_node_id);
 
@@ -362,13 +368,13 @@ CREATE INDEX IF NOT EXISTS idx_campus_edges_to ON campus_edges(to_node_id);
   });
 
   sql += `\n-- -------------------------------------------------------------------------
--- SEED DATA: CAMPUS NODES (${nodes.length} places)
+-- SEED DATA: CAMPUS NODES (${nodes.length} places & waypoints)
 -- -------------------------------------------------------------------------
 `;
 
   nodes.forEach((node) => {
     const aliasesJson = JSON.stringify(node.aliases || []);
-    sql += `INSERT INTO campus_nodes (id, name, short_name, category_id, block_code, subtitle, departments, hours, step_free, aliases, x_coord, y_coord, z_coord) VALUES (
+    sql += `INSERT INTO campus_nodes (id, name, short_name, category_id, block_code, subtitle, departments, hours, step_free, is_waypoint, aliases, x_coord, y_coord, z_coord) VALUES (
   ${escapeSql(node.id)},
   ${escapeSql(node.name)},
   ${escapeSql(node.shortName || node.name)},
@@ -378,6 +384,7 @@ CREATE INDEX IF NOT EXISTS idx_campus_edges_to ON campus_edges(to_node_id);
   ${escapeSql(node.departments || '')},
   ${escapeSql(node.hours || '24/7 Open')},
   ${node.stepFree !== false ? 'TRUE' : 'FALSE'},
+  ${node.isWaypoint ? 'TRUE' : 'FALSE'},
   ${escapeSql(aliasesJson)},
   ${Number(node.x).toFixed(4)},
   ${Number(node.y).toFixed(4)},
@@ -391,6 +398,7 @@ CREATE INDEX IF NOT EXISTS idx_campus_edges_to ON campus_edges(to_node_id);
   departments = EXCLUDED.departments,
   hours = EXCLUDED.hours,
   step_free = EXCLUDED.step_free,
+  is_waypoint = EXCLUDED.is_waypoint,
   aliases = EXCLUDED.aliases,
   x_coord = EXCLUDED.x_coord,
   y_coord = EXCLUDED.y_coord,
@@ -444,6 +452,7 @@ Stores all physical locations, buildings, gates, POIs, and navigational waypoint
 - **\`departments\`** (TEXT): Departments or services hosted at this node.
 - **\`hours\`** (VARCHAR 128): Operating schedule (e.g. \`8:00 AM - 10:00 PM\`, \`24/7 Open\`).
 - **\`step_free\`** (BOOLEAN): \`true\` if accessible without stairs; \`false\` if stairs required. Used by accessible routing.
+- **\`is_waypoint\`** (BOOLEAN): \`true\` if this node is an internal path correction / corner-bending waypoint (invisible to visitors on public map, directory & search); \`false\` for regular buildings, places & POIs.
 - **\`x_coord\`**, **\`y_coord\`** (DOUBLE PRECISION): Normalized UV coordinates on the base SVG map \`[0.000, 1.000]\`.
 - **\`aliases\`** (JSONB / TEXT): Array of alternative search terms for instant search matching.
 

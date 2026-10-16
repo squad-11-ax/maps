@@ -333,3 +333,56 @@
 .modal-btn-delete:hover {
   background: rgba(217, 48, 37, 0.08);
 }
+
+/* Waypoint / Path Correction Highlight Box */
+.waypoint-highlight-box {
+  background: rgba(242, 153, 74, 0.08);
+  border: 1.5px solid rgba(242, 153, 74, 0.4);
+  border-radius: 10px;
+  padding: 12px 14px;
+  transition: all 0.2s ease;
+}
+
+[data-theme='dark'] .waypoint-highlight-box {
+  background: rgba(242, 153, 74, 0.12);
+  border-color: rgba(242, 153, 74, 0.45);
+}
+
+.waypoint-highlight-box:hover {
+  background: rgba(242, 153, 74, 0.14);
+  border-color: #F2994A;
+}
+
+.waypoint-toggle-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.waypoint-label-text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.waypoint-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #D97706;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+[data-theme='dark'] .waypoint-title {
+  color: #FBBF24;
+}
+
+.waypoint-desc {
+  font-size: 12px;
+  color: var(--text-2, #5f6368);
+  line-height: 1.4;
+}
+

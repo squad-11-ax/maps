@@ -479,8 +479,13 @@ export default function MapCanvas({
           ? propsRef.current.nodes
           : NODES;
 
-        // 1. Campus POI & Building Markers
+        // 1. Campus POI & Building Markers (and Waypoints in Admin Mode)
         currentNodes.forEach((node) => {
+          // Path correction waypoints are invisible to visitors; show only in Admin Mode
+          if (node.isWaypoint && !propsRef.current.isAdminMode) {
+            return;
+          }
+
           const worldPos = mapToWorld(node.x, node.y);
           const screenVec = worldPos.clone().project(camera);
 
@@ -493,9 +498,10 @@ export default function MapCanvas({
             const isDest = node.id === curEnd;
             const isSelected = curSelected?.id === node.id;
             const isCatMatch = curCat && curCat !== 'all' && node.category === curCat;
+            const isWaypoint = Boolean(node.isWaypoint);
 
             // If a category filter is active, only show matching POIs or active route endpoints
-            if (curCat && curCat !== 'all' && !isCatMatch && !isStart && !isDest && !isSelected) {
+            if (curCat && curCat !== 'all' && !isCatMatch && !isStart && !isDest && !isSelected && !isWaypoint) {
               return;
             }
 
@@ -509,7 +515,8 @@ export default function MapCanvas({
               isSelected,
               isCatMatch,
               isUserAvatar: false,
-              priority: isDest ? 100 : isStart ? 90 : isSelected ? 80 : isCatMatch ? 75 : 10,
+              isWaypoint,
+              priority: isDest ? 100 : isStart ? 90 : isSelected ? 80 : isWaypoint ? 15 : isCatMatch ? 75 : 10,
             });
           }
         });
@@ -1053,19 +1060,33 @@ export default function MapCanvas({
                 </div>
               )}
 
+              {/* Waypoint Marker (Only shown in Admin Mode) */}
+              {!isUserAvatar && marker.isWaypoint && (
+                <div className="marker-waypoint" title={`Waypoint: ${node.name}`}>
+                  <div className="waypoint-inner-dot" />
+                </div>
+              )}
+
               {/* Standard POI Marker */}
-              {!isUserAvatar && !isStart && !isDest && showPOIs && (
+              {!isUserAvatar && !marker.isWaypoint && !isStart && !isDest && showPOIs && (
                 <div className={`marker-poi category-${(node.category || 'other').toLowerCase()} ${marker.isCatMatch ? 'category-highlighted' : ''}`}>
                   {getCategoryIcon(node.category)}
                 </div>
               )}
 
               {/* 2px Halo Label: Reveals full name close up, code at mid zoom, always for destination */}
-              {!isUserAvatar && (isDest || isStart || isSelected || zoomTier === 'close' || (zoomTier === 'mid' && node.blockCode)) && (
+              {!isUserAvatar && !marker.isWaypoint && (isDest || isStart || isSelected || zoomTier === 'close' || (zoomTier === 'mid' && node.blockCode)) && (
                 <span className={`marker-label ${isDest ? 'destination-label' : ''} ${zoomTier === 'mid' && !isDest ? 'code-only' : ''}`}>
                   {isDest || isSelected || zoomTier === 'close'
                     ? (node.shortName || node.name)
                     : (node.blockCode || node.shortName || node.name)}
+                </span>
+              )}
+
+              {/* Waypoint Label (Admin Mode) */}
+              {!isUserAvatar && marker.isWaypoint && (
+                <span className="marker-label waypoint-label">
+                  {node.shortName || node.name}
                 </span>
               )}
             </div>

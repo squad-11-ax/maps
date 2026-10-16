@@ -50,6 +50,7 @@ export default function App() {
   const [isPickingLocation, setIsPickingLocation] = useState(false);
   const [initialCoordinates, setInitialCoordinates] = useState(null);
   const [pendingNodeFormData, setPendingNodeFormData] = useState(null);
+  const [isEditorWaypoint, setIsEditorWaypoint] = useState(false);
 
   // Synchronize database updates across tabs and events
   useEffect(() => {
@@ -113,6 +114,9 @@ export default function App() {
       instruction: step.instruction,
     }));
   }, [routeSteps]);
+
+  const placesCount = useMemo(() => nodes.filter((n) => !n.isWaypoint).length, [nodes]);
+  const waypointsCount = useMemo(() => nodes.filter((n) => Boolean(n.isWaypoint)).length, [nodes]);
 
   // Reset current step when route changes
   const routeKey = `${startNodeId}-${endNodeId}-${stepFreeOnly}`;
@@ -244,7 +248,8 @@ export default function App() {
 
     if (pendingNodeFormData) {
       const updatedData = { ...pendingNodeFormData.currentData, x, y };
-      setEditingNode(pendingNodeFormData.isEditing ? updatedData : null);
+      setEditingNode(updatedData);
+      setIsEditorWaypoint(Boolean(pendingNodeFormData.currentData?.isWaypoint));
       setIsNodeEditorOpen(true);
     } else {
       setEditingNode(null);
@@ -253,6 +258,15 @@ export default function App() {
   }, [pendingNodeFormData]);
 
   const handleOpenAddModal = useCallback(() => {
+    setIsEditorWaypoint(false);
+    setEditingNode(null);
+    setInitialCoordinates(null);
+    setPendingNodeFormData(null);
+    setIsNodeEditorOpen(true);
+  }, []);
+
+  const handleOpenAddWaypoint = useCallback(() => {
+    setIsEditorWaypoint(true);
     setEditingNode(null);
     setInitialCoordinates(null);
     setPendingNodeFormData(null);
@@ -260,6 +274,7 @@ export default function App() {
   }, []);
 
   const handleAdminEditNode = useCallback((node) => {
+    setIsEditorWaypoint(Boolean(node.isWaypoint));
     setEditingNode(node);
     setInitialCoordinates(null);
     setPendingNodeFormData(null);
@@ -345,8 +360,11 @@ export default function App() {
       {isAdminMode && (
         <AdminToolbar
           nodesCount={nodes.length}
+          placesCount={placesCount}
+          waypointsCount={waypointsCount}
           edgesCount={edges.length}
           onOpenAddModal={handleOpenAddModal}
+          onOpenAddWaypoint={handleOpenAddWaypoint}
           onOpenManageModal={() => setIsManageModalOpen(true)}
           onOpenExportModal={() => setIsExportModalOpen(true)}
           onResetDefaults={handleResetDatabase}
@@ -538,13 +556,14 @@ export default function App() {
         {/* Admin Node Editor Modal (Add & Edit) */}
         {isNodeEditorOpen && (
           <NodeEditorModal
-            key={editingNode ? editingNode.id : `new-${initialCoordinates ? `${initialCoordinates.x}_${initialCoordinates.y}` : 'default'}`}
+            key={editingNode ? (editingNode.id ? `${editingNode.id}-${initialCoordinates ? `${initialCoordinates.x}_${initialCoordinates.y}` : 'edit'}` : `draft-${isEditorWaypoint ? 'waypoint' : 'place'}-${initialCoordinates ? `${initialCoordinates.x}_${initialCoordinates.y}` : 'edit'}`) : `new-${isEditorWaypoint ? 'waypoint' : 'place'}-${initialCoordinates ? `${initialCoordinates.x}_${initialCoordinates.y}` : 'default'}`}
             isOpen={isNodeEditorOpen}
             onClose={() => {
               setIsNodeEditorOpen(false);
               setEditingNode(null);
               setPendingNodeFormData(null);
               setInitialCoordinates(null);
+              setIsEditorWaypoint(false);
             }}
             nodeToEdit={editingNode}
             allNodes={nodes}
@@ -553,6 +572,7 @@ export default function App() {
             onDeleteNode={handleDeleteNode}
             onStartPickLocation={handleStartPickLocation}
             initialCoordinates={initialCoordinates}
+            initialIsWaypoint={isEditorWaypoint}
           />
         )}
 

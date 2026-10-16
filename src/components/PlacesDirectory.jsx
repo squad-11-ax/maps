@@ -23,6 +23,9 @@ export default function PlacesDirectory({
 
   const filteredPlaces = useMemo(() => {
     return allPlaces.filter((place) => {
+      // Exclude invisible path correction waypoints from directory
+      if (place.isWaypoint) return false;
+
       if (selectedCategory !== 'all' && place.category !== selectedCategory) {
         return false;
       }

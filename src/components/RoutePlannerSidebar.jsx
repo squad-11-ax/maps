@@ -76,9 +76,10 @@ export default function RoutePlannerSidebar({
   // Filter autocomplete options
   const filterNodes = useCallback((queryText) => {
     const q = (queryText || '').trim().toLowerCase();
-    if (!q) return allPlaces.slice(0, 6);
+    const destinationPlaces = allPlaces.filter((n) => !n.isWaypoint);
+    if (!q) return destinationPlaces.slice(0, 6);
 
-    return allPlaces.filter((n) => {
+    return destinationPlaces.filter((n) => {
       if (n.name.toLowerCase().includes(q)) return true;
       if (n.shortName && n.shortName.toLowerCase().includes(q)) return true;
       if (n.blockCode && n.blockCode.toLowerCase().includes(q)) return true;

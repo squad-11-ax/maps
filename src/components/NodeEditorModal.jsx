@@ -12,6 +12,7 @@ import './NodeEditorModal.css';
 
 const AVAILABLE_CATEGORIES = [
   ...CATEGORIES.filter((c) => c.id !== 'all'),
+  { id: 'Waypoint', label: 'Walkways & Waypoints' },
   { id: 'Services', label: 'Services & Operations' },
   { id: 'Public Area', label: 'Public Area & Grounds' },
 ];
@@ -26,19 +27,23 @@ export default function NodeEditorModal({
   onDeleteNode,
   onStartPickLocation,
   initialCoordinates = null,
+  initialIsWaypoint = false,
 }) {
-  const isEditing = Boolean(nodeToEdit);
+  const isEditing = Boolean(nodeToEdit && nodeToEdit.id && allNodes.some((n) => n.id === nodeToEdit.id));
 
   // Form Fields initialized directly from props
   const [nodeId, setNodeId] = useState(() => (nodeToEdit ? nodeToEdit.id : ''));
-  const [name, setName] = useState(() => (nodeToEdit ? nodeToEdit.name || '' : ''));
-  const [shortName, setShortName] = useState(() => (nodeToEdit ? nodeToEdit.shortName || nodeToEdit.name || '' : ''));
-  const [category, setCategory] = useState(() => (nodeToEdit ? nodeToEdit.category || 'Gates' : 'Gates'));
+  const [name, setName] = useState(() => (nodeToEdit ? nodeToEdit.name || '' : (initialIsWaypoint ? 'Walkway Waypoint' : '')));
+  const [shortName, setShortName] = useState(() => (nodeToEdit ? nodeToEdit.shortName || nodeToEdit.name || '' : (initialIsWaypoint ? 'Waypoint' : '')));
+  const [category, setCategory] = useState(() => (nodeToEdit ? nodeToEdit.category || 'Gates' : (initialIsWaypoint ? 'Waypoint' : 'Gates')));
   const [blockCode, setBlockCode] = useState(() => (nodeToEdit ? nodeToEdit.blockCode || '' : ''));
   const [subtitle, setSubtitle] = useState(() => (nodeToEdit ? nodeToEdit.subtitle || '' : ''));
   const [departments, setDepartments] = useState(() => (nodeToEdit ? nodeToEdit.departments || '' : ''));
   const [hours, setHours] = useState(() => (nodeToEdit ? nodeToEdit.hours || '24/7 Open' : '8:00 AM - 8:00 PM'));
   const [stepFree, setStepFree] = useState(() => (nodeToEdit ? nodeToEdit.stepFree !== false : true));
+  const [isWaypoint, setIsWaypoint] = useState(() => (
+    nodeToEdit ? Boolean(nodeToEdit.isWaypoint) : Boolean(initialIsWaypoint)
+  ));
   const [aliases, setAliases] = useState(() => (nodeToEdit && Array.isArray(nodeToEdit.aliases) ? nodeToEdit.aliases.join(', ') : ''));
   const [xCoord, setXCoord] = useState(() => {
     if (nodeToEdit && nodeToEdit.x != null) return Number(nodeToEdit.x).toFixed(3);
@@ -50,13 +55,18 @@ export default function NodeEditorModal({
     if (initialCoordinates && initialCoordinates.y != null) return Number(initialCoordinates.y).toFixed(3);
     return '0.500';
   });
-  const [connectedEdges, setConnectedEdges] = useState(() => (
-    nodeToEdit ? getConnectedNodeIds(nodeToEdit.id, allEdges) : ['PointA']
-  ));
+  const [connectedEdges, setConnectedEdges] = useState(() => {
+    if (nodeToEdit && Array.isArray(nodeToEdit.connectedEdges)) return nodeToEdit.connectedEdges;
+    if (nodeToEdit && nodeToEdit.id && allNodes.some((n) => n.id === nodeToEdit.id)) {
+      return getConnectedNodeIds(nodeToEdit.id, allEdges);
+    }
+    return allNodes[0] ? [allNodes[0].id] : ['PointA'];
+  });
   const [errorMsg, setErrorMsg] = useState('');
 
   // Form field unique IDs for accessibility
   const idFieldId = useId();
+  const isWaypointFieldId = useId();
   const nameFieldId = useId();
   const shortNameFieldId = useId();
   const categoryFieldId = useId();
@@ -83,6 +93,7 @@ export default function NodeEditorModal({
           departments,
           hours,
           stepFree,
+          isWaypoint,
           aliases,
           x: parseFloat(xCoord) || 0.5,
           y: parseFloat(yCoord) || 0.5,
@@ -105,7 +116,7 @@ export default function NodeEditorModal({
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!name.trim()) {
-      setErrorMsg('Full Name is required.');
+      setErrorMsg('Name is required.');
       return;
     }
 
@@ -120,12 +131,13 @@ export default function NodeEditorModal({
       id: isEditing ? nodeToEdit.id : nodeId.trim() || undefined,
       name: name.trim(),
       shortName: (shortName.trim() || name.trim()),
-      category,
+      category: isWaypoint ? (category === 'Gates' ? 'Waypoint' : category) : category,
       blockCode: blockCode.trim(),
       subtitle: subtitle.trim(),
       departments: departments.trim(),
       hours: hours.trim(),
       stepFree,
+      isWaypoint,
       aliases: aliases.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean),
       x: parsedX,
       y: parsedY,
@@ -157,12 +169,14 @@ export default function NodeEditorModal({
         {/* Modal Header */}
         <div className="node-modal-header">
           <div className="node-modal-title-group">
-            <div className="node-modal-icon-badge">
+            <div className="node-modal-icon-badge" style={isWaypoint ? { background: 'rgba(242, 153, 74, 0.15)', color: '#D97706' } : undefined}>
               <MapPin size={20} aria-hidden="true" />
             </div>
             <div>
               <h2 id="node-modal-heading" className="node-modal-title">
-                {isEditing ? `Edit Place: ${nodeToEdit.shortName || nodeToEdit.name}` : 'Add New Campus Place'}
+                {isEditing 
+                  ? (nodeToEdit.isWaypoint ? `Edit Waypoint: ${nodeToEdit.shortName || nodeToEdit.name}` : `Edit Place: ${nodeToEdit.shortName || nodeToEdit.name}`)
+                  : (isWaypoint ? 'Add Path Correction Waypoint' : 'Add New Campus Place')}
               </h2>
             </div>
           </div>
@@ -184,6 +198,35 @@ export default function NodeEditorModal({
             </div>
           )}
 
+          {/* Waypoint / Path Correction Checkbox */}
+          <div className="waypoint-highlight-box">
+            <label htmlFor={isWaypointFieldId} className="waypoint-toggle-label">
+              <input
+                id={isWaypointFieldId}
+                type="checkbox"
+                checked={isWaypoint}
+                onChange={(e) => {
+                  const checked = e.target.checked;
+                  setIsWaypoint(checked);
+                  if (checked) {
+                    if (!name.trim()) setName('Walkway Waypoint');
+                    if (!shortName.trim()) setShortName('Waypoint');
+                    if (category === 'Gates') setCategory('Waypoint');
+                  }
+                }}
+                className="checkbox-input"
+              />
+              <div className="waypoint-label-text">
+                <span className="waypoint-title">
+                  Waypoint / Path Correction
+                </span>
+                <span className="waypoint-desc">
+                  Drop corner-bending points anywhere on the map plane to route paths around obstacles without cluttering the map, search, or directory for visitors.
+                </span>
+              </div>
+            </label>
+          </div>
+
           {/* Identification Row */}
           <div className="form-row-2col">
             <div className="form-group">
@@ -198,7 +241,7 @@ export default function NodeEditorModal({
                 value={nodeId}
                 onChange={(e) => setNodeId(e.target.value)}
                 disabled={isEditing}
-                placeholder="e.g. BlockH, Gate5"
+                placeholder="e.g. BlockH, Gate5, Waypoint_1"
               />
             </div>
 

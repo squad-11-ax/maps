@@ -20,14 +20,25 @@ export default function NodeManagerModal({
   onLocateNode,
 }) {
   const [searchTerm, setSearchTerm] = useState('');
+  const [filterType, setFilterType] = useState('all'); // 'all' | 'places' | 'waypoints'
   const [editingRowId, setEditingRowId] = useState(null);
   const [renameValue, setRenameValue] = useState('');
   const [shortRenameValue, setShortRenameValue] = useState('');
 
+  const placesCount = useMemo(() => nodes.filter((n) => !n.isWaypoint).length, [nodes]);
+  const waypointsCount = useMemo(() => nodes.filter((n) => Boolean(n.isWaypoint)).length, [nodes]);
+
   const filteredNodes = useMemo(() => {
-    if (!searchTerm.trim()) return nodes;
+    let result = nodes;
+    if (filterType === 'places') {
+      result = result.filter((n) => !n.isWaypoint);
+    } else if (filterType === 'waypoints') {
+      result = result.filter((n) => Boolean(n.isWaypoint));
+    }
+
+    if (!searchTerm.trim()) return result;
     const q = searchTerm.trim().toLowerCase();
-    return nodes.filter(
+    return result.filter(
       (n) =>
         n.name.toLowerCase().includes(q) ||
         (n.shortName && n.shortName.toLowerCase().includes(q)) ||
@@ -35,7 +46,7 @@ export default function NodeManagerModal({
         (n.category && n.category.toLowerCase().includes(q)) ||
         n.id.toLowerCase().includes(q)
     );
-  }, [nodes, searchTerm]);
+  }, [nodes, filterType, searchTerm]);
 
   const handleStartRename = (node) => {
     setEditingRowId(node.id);
@@ -76,7 +87,7 @@ export default function NodeManagerModal({
             </div>
             <div>
               <h2 id="manager-modal-heading" className="node-modal-title">
-                Manage Campus Places & Quick Rename
+                Manage Campus Nodes & Waypoints
               </h2>
             </div>
           </div>
@@ -91,6 +102,37 @@ export default function NodeManagerModal({
         </div>
 
         <div className="node-modal-body">
+          {/* Filter Tabs */}
+          <div className="nodemanager-filter-tabs" role="tablist" aria-label="Node type filters">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={filterType === 'all'}
+              className={`nodemanager-filter-tab ${filterType === 'all' ? 'active' : ''}`}
+              onClick={() => setFilterType('all')}
+            >
+              All Nodes ({nodes.length})
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={filterType === 'places'}
+              className={`nodemanager-filter-tab ${filterType === 'places' ? 'active' : ''}`}
+              onClick={() => setFilterType('places')}
+            >
+              Campus Places ({placesCount})
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={filterType === 'waypoints'}
+              className={`nodemanager-filter-tab ${filterType === 'waypoints' ? 'active' : ''}`}
+              onClick={() => setFilterType('waypoints')}
+            >
+              Waypoints ({waypointsCount})
+            </button>
+          </div>
+
           {/* Search filter input */}
           <div className="nodemanager-search-bar">
             <Search size={16} className="text-secondary" aria-hidden="true" />
@@ -99,7 +141,13 @@ export default function NodeManagerModal({
               className="nodemanager-search-input"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Filter places by name, category, or block code..."
+              placeholder={
+                filterType === 'waypoints'
+                  ? 'Filter waypoints by name, ID, or walkway code...'
+                  : filterType === 'places'
+                  ? 'Filter campus places by name, category, or code...'
+                  : 'Filter nodes & waypoints by name, category, or code...'
+              }
               autoFocus
             />
             {searchTerm && (
@@ -120,7 +168,7 @@ export default function NodeManagerModal({
               <thead>
                 <tr>
                   <th style={{ width: '15%' }}>Code / ID</th>
-                  <th style={{ width: '45%' }}>Place Name & Label</th>
+                  <th style={{ width: '45%' }}>Node Name & Label</th>
                   <th style={{ width: '15%' }}>Category</th>
                   <th style={{ width: '25%', textAlign: 'right' }}>Actions</th>
                 </tr>
@@ -129,7 +177,11 @@ export default function NodeManagerModal({
                 {filteredNodes.length === 0 ? (
                   <tr>
                     <td colSpan="4" style={{ textAlign: 'center', padding: '24px', color: 'var(--text-2)' }}>
-                      No matching campus places found.
+                      {filterType === 'waypoints' 
+                        ? 'No routing waypoints found.' 
+                        : filterType === 'places' 
+                        ? 'No campus places found.' 
+                        : 'No matching campus nodes found.'}
                     </td>
                   </tr>
                 ) : (
@@ -164,7 +216,14 @@ export default function NodeManagerModal({
                             </div>
                           ) : (
                             <div>
-                              <div style={{ fontWeight: 600 }}>{node.name}</div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <span style={{ fontWeight: 600 }}>{node.name}</span>
+                                {node.isWaypoint && (
+                                  <span className="badge-tag badge-waypoint" title="Invisible routing waypoint (hidden from visitors)">
+                                    Waypoint
+                                  </span>
+                                )}
+                              </div>
                               {node.shortName && node.shortName !== node.name && (
                                 <div style={{ fontSize: '11px', color: 'var(--text-2)' }}>
                                   Marker: {node.shortName}
@@ -174,7 +233,9 @@ export default function NodeManagerModal({
                           )}
                         </td>
                         <td>
-                          <span className="badge-tag">{node.category}</span>
+                          <span className={`badge-tag ${node.isWaypoint ? 'badge-waypoint' : ''}`}>
+                            {node.category || (node.isWaypoint ? 'Waypoint' : 'Uncategorized')}
+                          </span>
                         </td>
                         <td>
                           <div className="table-actions">
@@ -220,7 +281,7 @@ export default function NodeManagerModal({
                                   onLocateNode(node);
                                   onClose();
                                 }}
-                                title="Fly camera to this place"
+                                title="Fly camera to this node"
                               >
                                 <Navigation size={12} />
                               </button>
@@ -230,11 +291,11 @@ export default function NodeManagerModal({
                               type="button"
                               className="table-btn table-btn-danger"
                               onClick={() => {
-                                if (window.confirm(`Delete "${node.name}"?`)) {
+                                if (window.confirm(`Delete ${node.isWaypoint ? 'waypoint' : 'place'} "${node.name}"?`)) {
                                   onDeleteNode(node.id);
                                 }
                               }}
-                              title="Delete place"
+                              title={node.isWaypoint ? "Delete waypoint" : "Delete place"}
                             >
                               <Trash2 size={12} />
                             </button>
@@ -251,7 +312,7 @@ export default function NodeManagerModal({
 
         <div className="node-modal-footer">
           <span style={{ fontSize: '12px', color: 'var(--text-2)' }}>
-            Showing {filteredNodes.length} of {nodes.length} places
+            Showing {filteredNodes.length} of {nodes.length} nodes ({placesCount} places, {waypointsCount} waypoints)
           </span>
           <button
             type="button"

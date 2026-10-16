@@ -121,6 +121,27 @@
   border-color: rgba(255, 255, 255, 0.16);
 }
 
+.admin-btn.admin-btn-waypoint {
+  background: rgba(245, 158, 11, 0.12);
+  color: #D97706;
+  border-color: rgba(245, 158, 11, 0.4);
+}
+
+.admin-btn.admin-btn-waypoint:hover {
+  background: rgba(245, 158, 11, 0.22);
+  border-color: rgba(245, 158, 11, 0.6);
+}
+
+[data-theme='dark'] .admin-btn.admin-btn-waypoint {
+  background: rgba(245, 158, 11, 0.2);
+  color: #FBBF24;
+  border-color: rgba(245, 158, 11, 0.45);
+}
+
+[data-theme='dark'] .admin-btn.admin-btn-waypoint:hover {
+  background: rgba(245, 158, 11, 0.3);
+}
+
 .admin-btn.admin-btn-exit {
   color: #D93025;
 }
