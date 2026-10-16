@@ -1,65 +1,55 @@
-/* Structural layout for clean slate styling */
-body {
-  margin: 0;
-  padding: 0;
-  font-family: sans-serif;
-  box-sizing: border-box;
-}
+/* ==========================================================================
+   APP SHELL LAYOUT STYLES
+   Full-screen 100dvh Map Layout with Safe-Area Insets
+   ========================================================================== */
 
-.main {
-  display: flex;
-  flex-direction: row;
+#body {
   width: 100%;
-  height: calc(100vh - 60px);
-  min-height: 500px;
-}
-
-.left {
-  width: 20%;
-  min-width: 250px;
-  display: flex;
-  flex-direction: column;
-  padding: 10px;
-  background-color: aliceblue;
-}
-
-.right {
-  width: 80%;
-  height: 100%;
+  height: 100vh;
+  height: 100dvh;
   position: relative;
+  overflow: hidden;
+  background-color: var(--map-bg);
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
-.up {
-  height: 40%;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  border: 1px solid black;
-  border-radius: 12px;
-  padding: 15px;
-  box-sizing: border-box;
-  box-shadow:  5px;
-}
-
-.down {
-  height: 60%;
-  margin-top: 10px;
-  border: 1px solid #ccc;
-  border-radius: 12px;
-  padding: 15px;
-  box-sizing: border-box;
-}
-
-.DropSearchHead {
-  font-size: 1.1rem;
-  margin: 5px 0;
-}
-
-.preset-btn {
-  display: block;
+.main-layout {
   width: 100%;
-  padding: 8px;
-  margin-bottom: 5px;
-  cursor: pointer;
-  text-align: left;
+  height: 100vh;
+  height: 100dvh;
+  position: relative;
+  overflow: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+/* Map Viewport Area */
+.map-viewport {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+}
+
+/* Skip Link for Keyboard Accessibility (WCAG 2.2 AA) */
+.skip-link {
+  position: absolute;
+  top: -60px;
+  left: var(--space-4);
+  background: var(--route);
+  color: var(--text-inverse);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-pill);
+  font-weight: var(--font-semibold);
+  font-size: var(--text-sm);
+  z-index: 999;
+  transition: top var(--motion-fast);
+  text-decoration: none;
+}
+
+.skip-link:focus {
+  top: var(--space-3);
+  box-shadow: var(--shadow-lg);
 }

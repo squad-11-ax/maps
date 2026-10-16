@@ -1,314 +1,1098 @@
-import { useRef, useEffect } from 'react'
-import * as THREE from 'three'
+import { useRef, useEffect, useState, useCallback } from 'react';
+import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { Line2 } from 'three/addons/lines/Line2.js';
+import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
+import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
+import { NODES } from '../data/nodesData';
+import { 
+  Utensils, 
+  Bed, 
+  FlaskConical, 
+  CreditCard, 
+  Car, 
+  DoorOpen, 
+  Bath, 
+  BookOpen, 
+  Building2
+} from 'lucide-react';
+import './MapOverlay.css';
 
-export default function App() {
+const MAP_BASE_WIDTH = 100;
+
+export default function MapCanvas({
+  nodes = [],
+  routePlanner = [],
+  currentStepIndex = 0,
+  startNodeId = null,
+  endNodeId = null,
+  selectedPlace = null,
+  onSelectPlace,
+  is3D = true,
+  showPOIs = true,
+  activeCategory = null,
+  onCameraHeadingChange,
+  isDarkMode = false,
+  onRegisterControls = null,
+  isAdminMode = false,
+  isPickingLocation = false,
+  onPickCoordinates = null,
+  onAdminEditNode = null,
+}) {
   const mountRef = useRef(null);
 
+  // Synchronized props ref to avoid stale closures in animate() loop
+  const propsRef = useRef({
+    nodes,
+    startNodeId,
+    endNodeId,
+    selectedPlace,
+    routePlanner,
+    currentStepIndex,
+    onCameraHeadingChange,
+    is3D,
+    showPOIs,
+    activeCategory,
+    isAdminMode,
+    isPickingLocation,
+    onPickCoordinates,
+    onAdminEditNode,
+  });
   useEffect(() => {
-    //? DOM element ref
-    const currentContainer = mountRef.current
-    const width = currentContainer.clientWidth
-    const height = currentContainer.clientHeight
-    
-    //! SCENE
-    const scene = new THREE.Scene()
-    scene.background = new THREE.Color(0x1a1a1a)
+    propsRef.current = {
+      nodes,
+      startNodeId,
+      endNodeId,
+      selectedPlace,
+      routePlanner,
+      currentStepIndex,
+      onCameraHeadingChange,
+      is3D,
+      showPOIs,
+      activeCategory,
+      isAdminMode,
+      isPickingLocation,
+      onPickCoordinates,
+      onAdminEditNode,
+    };
+  });
 
-    //! CAMERA  
-    const camera = new THREE.PerspectiveCamera(60, width / height, 0.1, 1000)
-    camera.position.set(0, 20, 0)
+  const engineRef = useRef({
+    scene: null,
+    camera: null,
+    controls: null,
+    renderer: null,
+    mapMesh: null,
+    mapHeight: null,
+    mapToWorld: null,
+    targetCameraPos: null,
+    targetControlsTarget: null,
+    userIsInteracting: false,
+    hasInitializedCamera: false,
+    destBeacon: null,
+    lineCasing: null,
+    lineActive: null,
+    lineWalked: null,
+    resolution: new THREE.Vector2(1, 1),
+  });
 
-    //! RENDER
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setSize(width, height)
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+  const [projectedMarkers, setProjectedMarkers] = useState([]);
+
+  // Check prefers-reduced-motion
+  const prefersReducedMotion = typeof window !== 'undefined' && 
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // Icon selector helper
+  const getCategoryIcon = (category) => {
+    switch (category) {
+      case 'Food': return <Utensils size={14} aria-hidden="true" />;
+      case 'Hostels': return <Bed size={14} aria-hidden="true" />;
+      case 'Labs': return <FlaskConical size={14} aria-hidden="true" />;
+      case 'ATM': return <CreditCard size={14} aria-hidden="true" />;
+      case 'Parking': return <Car size={14} aria-hidden="true" />;
+      case 'Gates': return <DoorOpen size={14} aria-hidden="true" />;
+      case 'Washrooms': return <Bath size={14} aria-hidden="true" />;
+      case 'Study': return <BookOpen size={14} aria-hidden="true" />;
+      default: return <Building2 size={14} aria-hidden="true" />;
+    }
+  };
+
+  // Setup Three.js scene
+  useEffect(() => {
+    const currentContainer = mountRef.current;
+    if (!currentContainer) return;
+
+    const width = currentContainer.clientWidth || window.innerWidth;
+    const height = currentContainer.clientHeight || window.innerHeight;
+
+    //! SCENE & BACKGROUND
+    const scene = new THREE.Scene();
+    const bgColor = isDarkMode ? 0x1A1A1A : 0xECEFF1;
+    scene.background = new THREE.Color(bgColor);
+    scene.fog = new THREE.Fog(bgColor, 70, 240);
+
+    //! AMBIENT INFINITE GROUND PLANE (Never black/empty void)
+    const groundGeo = new THREE.PlaneGeometry(1200, 1200);
+    const groundMat = new THREE.MeshBasicMaterial({ color: bgColor });
+    const groundMesh = new THREE.Mesh(groundGeo, groundMat);
+    groundMesh.rotation.x = -Math.PI / 2;
+    groundMesh.position.y = -0.1;
+    scene.add(groundMesh);
+
+    //! CAMERA
+    const camera = new THREE.PerspectiveCamera(55, width / height, 0.5, 1200);
+    camera.position.set(0, 38, 32);
+
+    //! CAMERA PRINCIPAL POINT OFFSET (accounting for desktop left panel)
+    const updateCameraOffset = (w, h) => {
+      if (w > 768) {
+        const leftPanelWidth = 390;
+        const topbarHeight = 56;
+        camera.setViewOffset(w, h, -leftPanelWidth / 2, -topbarHeight / 2, w, h);
+      } else {
+        camera.clearViewOffset();
+      }
+    };
+    updateCameraOffset(width, height);
+
+    //! RENDERER
+    const renderer = new THREE.WebGLRenderer({ 
+      antialias: true, 
+      powerPreference: 'high-performance' 
+    });
+    renderer.setSize(width, height);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
     currentContainer.appendChild(renderer.domElement);
 
-    //! CONTROLS
-    const controls = new OrbitControls(camera, renderer.domElement)
-    controls.enableDamping = true  
-    controls.dampingFactor = 0.05
-    controls.maxPolarAngle = Math.PI / 2
+    //! ORBIT CONTROLS WITH DAMPING & CLAMPED PITCH
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.maxPolarAngle = (65 * Math.PI) / 180; // Clamped to 65° max pitch
+    controls.minPolarAngle = 0; // Overhead 0°
+    controls.minDistance = 1; // Allows distance = 3, elevation = 2 (hypot ~3.6)
+    controls.maxDistance = 140;
+    controls.target.set(0, 0, 0);
+
+    controls.addEventListener('start', () => {
+      engineRef.current.userIsInteracting = true;
+    });
 
     //! LIGHTING
-    const light = new THREE.AmbientLight(0xffffff, 1.5)
-    scene.add(light)
-    
-    //! MAP PLANE WITH DYNAMIC ASPECT RATIO
-    const MAP_BASE_WIDTH = 100;
-    const textureLoader = new THREE.TextureLoader();
+    const ambientLight = new THREE.AmbientLight(0xffffff, 1.4);
+    scene.add(ambientLight);
 
-    const create2DRibbon = (points, ribbonWidth, yOffset = 0.05, color = 0x00aaff) => {
-      if (!points || points.length < 2) return new THREE.Group();
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
+    dirLight.position.set(50, 100, 50);
+    scene.add(dirLight);
 
-      const vertices = [];
-      const indices = [];
-      const uvs = [];
+    //! MAP BASE PLANE LOADING (Preserves user's SVG base map)
+    const loadMapTexture = (url) => {
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => {
+          const w = img.naturalWidth || img.width || 1810;
+          const h = img.naturalHeight || img.height || 1210;
+          const scale = 2; // 2x sharp vector rasterization
+          const canvas = document.createElement('canvas');
+          canvas.width = w * scale;
+          canvas.height = h * scale;
+          const ctx = canvas.getContext('2d');
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = 'high';
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
-      for (let i = 0; i < points.length; i++) {
-        const current = points[i];
-        const dir = new THREE.Vector2();
-
-        // Compute 2D direction vector (XZ plane)
-        if (i < points.length - 1) {
-          dir.set(points[i + 1].x - current.x, points[i + 1].z - current.z);
-        } else {
-          dir.set(current.x - points[i - 1].x, current.z - points[i - 1].z);
-        }
-        dir.normalize();
-
-        // Calculate perpendicular vector (-z, x)
-        const normal = new THREE.Vector2(-dir.y, dir.x);
-        const halfWidth = ribbonWidth / 2;
-
-        // Compute left and right vertex positions
-        const leftX = current.x + normal.x * halfWidth;
-        const leftZ = current.z + normal.y * halfWidth;
-        const rightX = current.x - normal.x * halfWidth;
-        const rightZ = current.z - normal.y * halfWidth;
-
-        // Push positions elevated slightly above map
-        vertices.push(leftX, yOffset, leftZ);
-        vertices.push(rightX, yOffset, rightZ);
-
-        // UV mapping
-        const progress = i / (points.length - 1);
-        uvs.push(0, progress);
-        uvs.push(1, progress);
-
-        // Build quad faces
-        if (i < points.length - 1) {
-          const baseIndex = i * 2;
-          indices.push(baseIndex, baseIndex + 1, baseIndex + 2);
-          indices.push(baseIndex + 1, baseIndex + 3, baseIndex + 2);
-        }
-      }
-
-      const geometry = new THREE.BufferGeometry();
-      geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
-      geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
-      geometry.setIndex(indices);
-
-      const material = new THREE.MeshBasicMaterial({
-        color: color,
-        side: THREE.DoubleSide,
-        transparent: true,
-        opacity: 0.9
+          const texture = new THREE.CanvasTexture(canvas);
+          texture.colorSpace = THREE.SRGBColorSpace;
+          texture.generateMipmaps = true;
+          resolve({ texture, aspectRatio: h / w });
+        };
+        img.onerror = () => {
+          const textureLoader = new THREE.TextureLoader();
+          textureLoader.load(encodeURI(url), (tex) => {
+            tex.colorSpace = THREE.SRGBColorSpace;
+            const fallbackRatio = (tex.image?.height || 1210) / (tex.image?.width || 1810);
+            resolve({ texture: tex, aspectRatio: fallbackRatio });
+          });
+        };
+        img.src = encodeURI(url);
       });
-
-      return new THREE.Mesh(geometry, material);
     };
 
-    textureLoader.load('/photo.png', (mapTexture) => {
-      const imageWidth = mapTexture.image.width;
-      const imageHeight = mapTexture.image.height;
-      const aspectRatio = imageHeight / imageWidth;
+    let mapMesh = null;
 
+    loadMapTexture('/enhaned maps.svg').then(({ texture: mapTexture, aspectRatio }) => {
       const mapWidth = MAP_BASE_WIDTH;
       const mapHeight = MAP_BASE_WIDTH * aspectRatio;
 
       const planeGeo = new THREE.PlaneGeometry(mapWidth, mapHeight);
-      const planeMat = new THREE.MeshBasicMaterial({ map: mapTexture });
-      const mapMesh = new THREE.Mesh(planeGeo, planeMat);
-      
+      const planeMat = new THREE.MeshBasicMaterial({ 
+        map: mapTexture,
+        depthWrite: true,
+      });
+      mapMesh = new THREE.Mesh(planeGeo, planeMat);
       mapMesh.rotation.x = -Math.PI / 2;
+      mapMesh.position.y = 0.05;
       scene.add(mapMesh);
-      
-      //! SCALE CONVERTER
+
+      // Soft architectural ambient drop shadow under campus map
+      const shadowGeo = new THREE.PlaneGeometry(mapWidth + 5, mapHeight + 5);
+      const shadowCanvas = document.createElement('canvas');
+      shadowCanvas.width = 128;
+      shadowCanvas.height = 128;
+      const sCtx = shadowCanvas.getContext('2d');
+      const grad = sCtx.createRadialGradient(64, 64, 45, 64, 64, 64);
+      grad.addColorStop(0, 'rgba(0, 0, 0, 0.35)');
+      grad.addColorStop(0.85, 'rgba(0, 0, 0, 0.08)');
+      grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      sCtx.fillStyle = grad;
+      sCtx.fillRect(0, 0, 128, 128);
+      const shadowTex = new THREE.CanvasTexture(shadowCanvas);
+      const shadowMat = new THREE.MeshBasicMaterial({
+        map: shadowTex,
+        transparent: true,
+        opacity: isDarkMode ? 0.45 : 0.22,
+        depthWrite: false,
+      });
+      const shadowMesh = new THREE.Mesh(shadowGeo, shadowMat);
+      shadowMesh.rotation.x = -Math.PI / 2;
+      shadowMesh.position.y = 0.02;
+      scene.add(shadowMesh);
+
+      // 3D Destination Beacon Ring (radiates at target destination)
+      const ringGeo = new THREE.RingGeometry(0.7, 1.25, 32);
+      const ringMat = new THREE.MeshBasicMaterial({
+        color: 0xD93025,
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 0.7,
+        depthWrite: false,
+      });
+      const beaconMesh = new THREE.Mesh(ringGeo, ringMat);
+      beaconMesh.rotation.x = -Math.PI / 2;
+      beaconMesh.position.set(0, 0.21, 0);
+      beaconMesh.visible = false;
+      scene.add(beaconMesh);
+      engineRef.current.destBeacon = beaconMesh;
+
+      engineRef.current.mapMesh = mapMesh;
+      engineRef.current.mapHeight = mapHeight;
+
       const mapToWorld = (u, v) => {
         const x = (u - 0.5) * mapWidth;
         const z = (v - 0.5) * mapHeight;
-        return new THREE.Vector3(x, 0.5, z);
+        return new THREE.Vector3(x, 0.2, z);
       };
 
-      //! PLOT POINTS HELPER
-      const point = (position , hexColor) => {
-        const geo = new THREE.SphereGeometry(0.8, 16, 16);
-        const mat = new THREE.MeshBasicMaterial({ color: hexColor});
-        const mesh = new THREE.Mesh(geo, mat);
-        mesh.position.copy(position);
-        scene.add(mesh);
-        return mesh; // FIXED: Changed renderer.mesh to mesh
-      };
-      
-      //! POINTS CREATION
-      const pointA = mapToWorld(0.22,0.935); // Center
-      const pointB = mapToWorld(0.32, 0.711); // MediSquare-1
-      const pointC = mapToWorld(0.351, 0.661); // MediSquare-2
-      const pointD = mapToWorld(0.398, 0.546); // MS-library
-      const pointE = mapToWorld(0.501, 0.607); // sarasawti-library
-      const pointF = mapToWorld(0.503, 0.64); // Bottom-right
-      const pointG = mapToWorld(0.523, 0.590); // Bottom-right
-      const pointH = mapToWorld(0.528, 0.662); // Bottom-right                            
-      const pointI = mapToWorld(0.546, 0.605); // Bottom-right
-      const pointJ = mapToWorld(0.504, 0.748); // Bottom-right
+      engineRef.current.mapToWorld = mapToWorld;
+      window.dispatchEvent(new CustomEvent('mapEngineReady'));
+    });
 
-      const pointK = mapToWorld(0.272, 0.413); // Bottom-right
-      const pointL = mapToWorld(0.271, 0.384); // Bottom-right
-      const pointM = mapToWorld(0.323, 0.250); // Bottom-right
-      const pointN = mapToWorld(0.475, 0.347); // Bottom-right
-      const pointO = mapToWorld(0.651, 0.466); // Bottom-right
-      const pointP = mapToWorld(0.568, 0.543); // Bottom-right
-      const pointQ = mapToWorld(0.158, 0.462); // Bottom-right
-      const pointR = mapToWorld(0.116, 0.513); // Bottom-right
-      const pointS = mapToWorld(0.097, 0.501); // Bottom-right
-      const pointT = mapToWorld(0.672, 0.477); // Bottom-right
-      const pointU = mapToWorld(0.682, 0.442); // Bottom-right
-      const pointV = mapToWorld(0.674, 0.422); // Bottom-right
-      const pointW = mapToWorld(0.697, 0.346); // Bottom-right
-      const pointX = mapToWorld(0.716, 0.335); // Bottom-right
-      const pointY = mapToWorld(0.753, 0.221); // Bottom-right
-      const pointZ = mapToWorld(0.504, 0.206); // Bottom-right
-      
-      const red = 0xff0000
-      const pur = 0x8000ff
+    //! STORE ENGINE REFS
+    engineRef.current.scene = scene;
+    engineRef.current.camera = camera;
+    engineRef.current.controls = controls;
+    engineRef.current.renderer = renderer;
+    engineRef.current.resolution = new THREE.Vector2(width, height);
 
-      point(pointA , red); 
-      point(pointB , pur); 
-      point(pointC , red); 
-      point(pointD , red); 
-      point(pointE , red); 
-      // point(pointF , pur); 
-      point(pointG , red); 
-      // point(pointH , red); 
-      point(pointI , red); 
-      // point(pointJ , red); 
-      // point(pointK , red); 
-      // point(pointL , red); 
-      // point(pointM , red); 
-      // point(pointN , red); 
-      // point(pointO , red); 
-      point(pointP , red); 
-      // point(pointQ , red); 
-      // point(pointR , red); 
-      // point(pointS , red); 
-      // point(pointT , red); 
-      // point(pointU , red); 
-      // point(pointV , red); 
-      // point(pointW , red); 
-      // point(pointX , red); 
-      // point(pointY , red); 
-      // point(pointZ , red); 
+    //! RESIZE LISTENER
+    const handleResize = () => {
+      if (!currentContainer) return;
+      const w = currentContainer.clientWidth;
+      const h = currentContainer.clientHeight;
+      camera.aspect = w / h;
+      updateCameraOffset(w, h);
+      camera.updateProjectionMatrix();
+      renderer.setSize(w, h);
+      engineRef.current.resolution.set(w, h);
 
+      if (engineRef.current.lineCasing) {
+        engineRef.current.lineCasing.material.resolution.set(w, h);
+      }
+      if (engineRef.current.lineActive) {
+        engineRef.current.lineActive.material.resolution.set(w, h);
+      }
+      if (engineRef.current.lineWalked) {
+        engineRef.current.lineWalked.material.resolution.set(w, h);
+      }
+    };
+    window.addEventListener('resize', handleResize);
 
-      
-      //! ROUTE LINE
-      //! ROUTE LINE (2D Ribbon)
-        const routePoints = [pointA, pointB, pointC, pointD, pointE, pointG, pointI, pointP];
-        const ribbonWidth = 1.2;
-        const vertices = [];
-        const indices = [];
+    //! KEYBOARD LISTENER FOR ACCESSIBILITY (WCAG)
+    const handleKeyDown = (e) => {
+      // Don't intercept if typing in an input
+      if (['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) return;
 
-        // Calculate 2D offset vertices along the path
-        for (let i = 0; i < routePoints.length; i++) {
-          const p = routePoints[i];
-          const next = routePoints[i + 1] || p;
-          const prev = routePoints[i - 1] || p;
-          
-          const dir = new THREE.Vector2(next.x - prev.x, next.z - prev.z).normalize();
-          const normal = new THREE.Vector2(-dir.y, dir.x).multiplyScalar(ribbonWidth / 2);
+      const panDelta = 2.5;
+      switch (e.key) {
+        case 'ArrowUp':
+          controls.target.z -= panDelta;
+          camera.position.z -= panDelta;
+          break;
+        case 'ArrowDown':
+          controls.target.z += panDelta;
+          camera.position.z += panDelta;
+          break;
+        case 'ArrowLeft':
+          controls.target.x -= panDelta;
+          camera.position.x -= panDelta;
+          break;
+        case 'ArrowRight':
+          controls.target.x += panDelta;
+          camera.position.x += panDelta;
+          break;
+        case '+':
+        case '=':
+          camera.position.lerp(controls.target, 0.15);
+          break;
+        case '-':
+        case '_':
+          camera.position.add(camera.position.clone().sub(controls.target).multiplyScalar(0.15));
+          break;
+        case 'r':
+        case 'R': {
+          const currentDist = camera.position.distanceTo(controls.target);
+          const targetPos = new THREE.Vector3(
+            controls.target.x,
+            controls.target.y + (currentDist * Math.sin(controls.getPolarAngle())),
+            controls.target.z + (currentDist * Math.cos(controls.getPolarAngle()))
+          );
+          camera.position.copy(targetPos);
+          controls.update();
+          break;
+        }
+        default:
+          break;
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
 
-          // Left & Right vertices (Y = 0.1 elevates ribbon above image plane)
-          vertices.push(p.x + normal.x, 0.1, p.z + normal.y);
-          vertices.push(p.x - normal.x, 0.1, p.z - normal.y);
+    //! CANVAS POINTER LISTENER FOR COORDINATE PICKING (ADMIN MODE)
+    let pointerDownPos = null;
+    const handlePointerDown = (e) => {
+      pointerDownPos = { x: e.clientX, y: e.clientY };
+    };
+    const handlePointerUp = (e) => {
+      if (!pointerDownPos) return;
+      const dist = Math.hypot(e.clientX - pointerDownPos.x, e.clientY - pointerDownPos.y);
+      pointerDownPos = null;
+      if (dist > 8) return; // Ignore drag/pan
 
-          if (i < routePoints.length - 1) {
-            const idx = i * 2;
-            indices.push(idx, idx + 1, idx + 2, idx + 1, idx + 3, idx + 2);
+      const { isPickingLocation, onPickCoordinates } = propsRef.current;
+      if (!isPickingLocation || !onPickCoordinates) return;
+
+      const { renderer: r, camera: c, mapMesh: mesh, mapHeight: mh } = engineRef.current;
+      if (!r || !c || !mesh || !mh) return;
+
+      const rect = r.domElement.getBoundingClientRect();
+      const mouse = new THREE.Vector2(
+        ((e.clientX - rect.left) / rect.width) * 2 - 1,
+        -((e.clientY - rect.top) / rect.height) * 2 + 1
+      );
+
+      const raycaster = new THREE.Raycaster();
+      raycaster.setFromCamera(mouse, c);
+      const intersects = raycaster.intersectObject(mesh);
+
+      if (intersects.length > 0) {
+        const point = intersects[0].point;
+        const u = Number(((point.x / MAP_BASE_WIDTH) + 0.5).toFixed(3));
+        const v = Number(((point.z / mh) + 0.5).toFixed(3));
+        onPickCoordinates({ x: u, y: v });
+      }
+    };
+
+    renderer.domElement.addEventListener('pointerdown', handlePointerDown);
+    renderer.domElement.addEventListener('pointerup', handlePointerUp);
+
+    //! ANIMATION RENDER LOOP
+    let animationId;
+    let lastHeading = null;
+
+    const animate = () => {
+      animationId = requestAnimationFrame(animate);
+
+      // Camera Follow Smooth Lerp (5% per frame exponential decay)
+      if (!engineRef.current.userIsInteracting && engineRef.current?.targetCameraPos && engineRef.current?.targetControlsTarget) {
+        if (prefersReducedMotion) {
+          camera.position.copy(engineRef.current.targetCameraPos);
+          controls.target.copy(engineRef.current.targetControlsTarget);
+        } else {
+          camera.position.lerp(engineRef.current.targetCameraPos, 0.05);
+          controls.target.lerp(engineRef.current.targetControlsTarget, 0.05);
+        }
+      }
+
+      // Animate Destination 3D Beacon Pulse
+      if (engineRef.current.destBeacon && engineRef.current.destBeacon.visible) {
+        const pulse = (Math.sin(performance.now() * 0.005) + 1) * 0.5;
+        const scale = 1.0 + pulse * 0.7;
+        engineRef.current.destBeacon.scale.set(scale, scale, 1);
+        engineRef.current.destBeacon.material.opacity = 0.75 - pulse * 0.5;
+      }
+
+      // Animate Active Route Flow
+      if (engineRef.current.lineActive) {
+        engineRef.current.lineActive.material.dashOffset -= 0.035;
+      }
+
+      // Clamp controls.target to campus bounds to prevent void panning
+      controls.target.x = THREE.MathUtils.clamp(controls.target.x, -55, 55);
+      controls.target.z = THREE.MathUtils.clamp(controls.target.z, -45, 45);
+
+      controls.update();
+      renderer.render(scene, camera);
+
+      // Report camera azimuth heading to controls
+      const azimuth = controls.getAzimuthalAngle();
+      const { onCameraHeadingChange: cbHeading } = propsRef.current;
+      if (cbHeading && Math.abs(azimuth - lastHeading) > 0.02) {
+        lastHeading = azimuth;
+        cbHeading(azimuth);
+      }
+
+      // Compute projected screen markers and collision culling
+      if (engineRef.current.mapToWorld) {
+        const markers = [];
+        const camPos = camera.position;
+        const camDist = camPos.distanceTo(controls.target);
+
+        // Zoom tier based on camera distance: close (< 45), mid (45 - 85), far (> 85)
+        const zoomTier = camDist < 45 ? 'close' : camDist < 85 ? 'mid' : 'far';
+
+        const mapToWorld = engineRef.current.mapToWorld;
+        const halfW = width / 2;
+        const halfH = height / 2;
+
+        const {
+          startNodeId: curStart,
+          endNodeId: curEnd,
+          selectedPlace: curSelected,
+          routePlanner: curRoute,
+          currentStepIndex: curStepIdx,
+          activeCategory: curCat,
+        } = propsRef.current;
+
+        const currentNodes = (propsRef.current.nodes && propsRef.current.nodes.length > 0)
+          ? propsRef.current.nodes
+          : NODES;
+
+        // 1. Campus POI & Building Markers (and Waypoints in Admin Mode)
+        currentNodes.forEach((node) => {
+          // Path correction waypoints are invisible to visitors; show only in Admin Mode
+          if (node.isWaypoint && !propsRef.current.isAdminMode) {
+            return;
+          }
+
+          const worldPos = mapToWorld(node.x, node.y);
+          const screenVec = worldPos.clone().project(camera);
+
+          // Check if within screen frustum
+          if (screenVec.z < 1.0 && Math.abs(screenVec.x) <= 1.15 && Math.abs(screenVec.y) <= 1.15) {
+            const screenX = (screenVec.x * halfW) + halfW;
+            const screenY = (-(screenVec.y * halfH)) + halfH;
+
+            const isStart = node.id === curStart;
+            const isDest = node.id === curEnd;
+            const isSelected = curSelected?.id === node.id;
+            const isCatMatch = curCat && curCat !== 'all' && node.category === curCat;
+            const isWaypoint = Boolean(node.isWaypoint);
+
+            // If a category filter is active, only show matching POIs or active route endpoints
+            if (curCat && curCat !== 'all' && !isCatMatch && !isStart && !isDest && !isSelected && !isWaypoint) {
+              return;
+            }
+
+            markers.push({
+              node,
+              screenX,
+              screenY,
+              zoomTier,
+              isStart,
+              isDest,
+              isSelected,
+              isCatMatch,
+              isUserAvatar: false,
+              isWaypoint,
+              priority: isDest ? 100 : isStart ? 90 : isSelected ? 80 : isWaypoint ? 15 : isCatMatch ? 75 : 10,
+            });
+          }
+        });
+
+        // 2. User Live Location Marker (advances step-by-step with camera follow)
+        let userU = null;
+        let userV = null;
+        let nextU = null;
+        let nextV = null;
+
+        if (curRoute && curRoute.length > 0 && curRoute[curStepIdx]) {
+          const currentStepNode = curRoute[curStepIdx];
+          userU = currentStepNode.lat;
+          userV = currentStepNode.lng;
+          const nextStepNode = curRoute[curStepIdx + 1];
+          if (nextStepNode) {
+            nextU = nextStepNode.lat;
+            nextV = nextStepNode.lng;
+          }
+        } else {
+          const startNode = currentNodes.find((n) => n.id === (curStart || 'PointA'));
+          if (startNode) {
+            userU = startNode.x;
+            userV = startNode.y;
           }
         }
 
-        // 1. Updated Geometry
-        const pathGeo = new THREE.BufferGeometry();
-        pathGeo.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
-        pathGeo.setIndex(indices);
+        if (userU !== null && userV !== null) {
+          const userWorld = mapToWorld(userU, userV);
+          const userVec = userWorld.clone().project(camera);
 
-        // 2. Updated Material
-        const pathMat = new THREE.MeshBasicMaterial({
-          color: 0x00aaff,
-          side: THREE.DoubleSide
-        })
-      const pathMesh = new THREE.Mesh(pathGeo, pathMat);
-      scene.add(pathMesh);
+          if (userVec.z < 1.0 && Math.abs(userVec.x) <= 1.25 && Math.abs(userVec.y) <= 1.25) {
+            const uScreenX = (userVec.x * halfW) + halfW;
+            const uScreenY = (-(userVec.y * halfH)) + halfH;
 
+            let headingDeg = null;
+            if (nextU !== null && nextV !== null) {
+              const nextWorld = mapToWorld(nextU, nextV);
+              const nextVec = nextWorld.clone().project(camera);
+              const nScreenX = (nextVec.x * halfW) + halfW;
+              const nScreenY = (-(nextVec.y * halfH)) + halfH;
+              headingDeg = Math.atan2(nScreenY - uScreenY, nScreenX - uScreenX) * (180 / Math.PI) + 90;
+            }
 
-      //! FIXED: 3D Vector calculation on XZ plane with Y elevation
-      function getOuterPoint(targetPoint, nextNode, distance = 15, elevation = 10) {
-        // Calculate direction vector along the XZ plane
-        const dx = nextNode.x - targetPoint.x;
-        const dz = nextNode.z - targetPoint.z;
-
-        const length = Math.hypot(dx, dz);
-
-        if (length === 0) {
-          throw new Error("targetPoint and nextNode cannot be identical.");
+            markers.push({
+              node: {
+                id: '__user_avatar__',
+                name: 'Your Current Location',
+                shortName: 'You',
+              },
+              screenX: uScreenX,
+              screenY: uScreenY,
+              zoomTier,
+              isStart: false,
+              isDest: false,
+              isSelected: false,
+              isUserAvatar: true,
+              headingDeg,
+              priority: 999, // Guaranteed top priority, never culled
+            });
+          }
         }
 
-        // Push back along the line from nextNode -> targetPoint
-        const x = targetPoint.x - distance * (dx / length);
-        const z = targetPoint.z - distance * (dz / length);
-        const y = targetPoint.y + elevation; // Set camera height above the ground
+        // Collision culling: sort by priority descending
+        markers.sort((a, b) => b.priority - a.priority);
+        const culled = [];
+        const minDistancePx = zoomTier === 'far' ? 44 : 32;
 
-        return new THREE.Vector3(x, y, z);
+        for (const m of markers) {
+          // Guaranteed visible: user avatar, destination, start, selected
+          if (m.priority >= 70) {
+            culled.push(m);
+            continue;
+          }
+
+          // Check collision with already accepted markers
+          const collides = culled.some((other) => {
+            const dx = m.screenX - other.screenX;
+            const dy = m.screenY - other.screenY;
+            return Math.hypot(dx, dy) < minDistancePx;
+          });
+
+          if (!collides) {
+            culled.push(m);
+          }
+        }
+
+        setProjectedMarkers(culled);
       }
-
-      // Usage inside textureLoader callback:
-      const targetPoint = pointC;
-      const nextNode = pointJ;
-
-      // Pass custom distance away from point and camera height elevation
-      const cameraPos = getOuterPoint(pointC, pointD, 15, 7); 
-
-      // Update camera and controls correctly
-      camera.position.copy(cameraPos);
-      controls.target.copy(targetPoint);
-      controls.update();
-
-    }); 
-
-    //! RESIZE HANDLER
-    const handleResize = () => {
-      const w = currentContainer.clientWidth
-      const h = currentContainer.clientHeight
-      camera.aspect = w / h
-      camera.updateProjectionMatrix()
-      renderer.setSize(w, h)
-    }
-
-    window.addEventListener('resize', handleResize)
-
-    //! ANIMATION LOOP
-    let animationFrameID;
-    const animate = () => {
-      animationFrameID = requestAnimationFrame(animate)
-      controls.update()
-      renderer.render(scene, camera)      
-    }
+    };
     animate();
-    
+
+    // Clean up
     return () => {
-      //! CLEANUP (strictmode)
-      window.removeEventListener('resize', handleResize)
-      cancelAnimationFrame(animationFrameID)
-      controls.dispose()
-      renderer.dispose()
-      if (currentContainer.contains(renderer.domElement)){
-        currentContainer.removeChild(renderer.domElement)
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('keydown', handleKeyDown);
+      renderer.domElement.removeEventListener('pointerdown', handlePointerDown);
+      renderer.domElement.removeEventListener('pointerup', handlePointerUp);
+      cancelAnimationFrame(animationId);
+      controls.dispose();
+      renderer.dispose();
+      if (currentContainer.contains(renderer.domElement)) {
+        currentContainer.removeChild(renderer.domElement);
       }
+    };
+  }, [isDarkMode, prefersReducedMotion]);
+
+  // Helper: Smooth camera flyTo / target retargeting
+  const flyTo = useCallback((targetPos, targetControlsTarget) => {
+    const { camera, controls } = engineRef.current;
+    if (!camera || !controls) return;
+
+    engineRef.current.userIsInteracting = false;
+    if (prefersReducedMotion) {
+      camera.position.copy(targetPos);
+      controls.target.copy(targetControlsTarget);
+      controls.update();
+      return;
     }
-  }, [])
+
+    engineRef.current.targetCameraPos = targetPos.clone();
+    engineRef.current.targetControlsTarget = targetControlsTarget.clone();
+  }, [prefersReducedMotion]);
+
+  // Helper: Reset North
+  const resetNorth = useCallback(() => {
+    const { camera, controls } = engineRef.current;
+    if (!camera || !controls) return;
+    const currentDist = camera.position.distanceTo(controls.target);
+    const targetPos = new THREE.Vector3(
+      controls.target.x,
+      controls.target.y + (currentDist * Math.sin(controls.getPolarAngle())),
+      controls.target.z + (currentDist * Math.cos(controls.getPolarAngle()))
+    );
+    flyTo(targetPos, controls.target.clone());
+  }, [flyTo]);
+
+  // Toggle 2D / 3D tilt
+  useEffect(() => {
+    const { camera, controls } = engineRef.current;
+    if (!camera || !controls) return;
+    engineRef.current.userIsInteracting = false;
+
+    if (routePlanner && routePlanner.length > 0) {
+      // Re-focus handled by updateCamera effect
+      return;
+    }
+
+    const currentDist = camera.position.distanceTo(controls.target) || 45;
+    if (is3D) {
+      // 3D perspective: ~50° pitch
+      const pitchRad = (50 * Math.PI) / 180;
+      const targetPos = new THREE.Vector3(
+        controls.target.x,
+        controls.target.y + currentDist * Math.cos(pitchRad),
+        controls.target.z + currentDist * Math.sin(pitchRad)
+      );
+      flyTo(targetPos, controls.target.clone());
+    } else {
+      // 2D overhead: 0° pitch
+      const targetPos = new THREE.Vector3(
+        controls.target.x,
+        controls.target.y + currentDist,
+        controls.target.z + 0.001
+      );
+      flyTo(targetPos, controls.target.clone());
+    }
+  }, [is3D, routePlanner, flyTo]);
+
+  //! EXPOSE IMPERATIVE CONTROLS TO PARENT
+  useEffect(() => {
+    if (!onRegisterControls) return;
+    onRegisterControls({
+      zoomIn: () => {
+        const { camera, controls } = engineRef.current;
+        if (!camera || !controls) return;
+        const targetPos = camera.position.clone().lerp(controls.target, 0.25);
+        flyTo(targetPos, controls.target.clone());
+      },
+      zoomOut: () => {
+        const { camera, controls } = engineRef.current;
+        if (!camera || !controls) return;
+        const offset = camera.position.clone().sub(controls.target).multiplyScalar(1.25);
+        const targetPos = controls.target.clone().add(offset);
+        flyTo(targetPos, controls.target.clone());
+      },
+      resetNorth,
+      locateMe: () => {
+        engineRef.current.userIsInteracting = false;
+        if (!engineRef.current?.mapToWorld) return;
+        if (routePlanner && routePlanner.length > 0 && routePlanner[currentStepIndex]) {
+          const step = routePlanner[currentStepIndex];
+          const targetPoint = engineRef.current.mapToWorld(step.lat, step.lng);
+          const nextStep = routePlanner[currentStepIndex + 1];
+          let cameraPos;
+          if (!is3D) {
+            cameraPos = new THREE.Vector3(targetPoint.x, targetPoint.y + 14, targetPoint.z + 0.001);
+          } else if (nextStep) {
+            const nextNode = engineRef.current.mapToWorld(nextStep.lat, nextStep.lng);
+            const dx = nextNode.x - targetPoint.x;
+            const dz = nextNode.z - targetPoint.z;
+            const length = Math.hypot(dx, dz) || 1;
+            const distance = 3;
+            const elevation = 2;
+            cameraPos = new THREE.Vector3(
+              targetPoint.x - distance * (dx / length),
+              targetPoint.y + elevation,
+              targetPoint.z - distance * (dz / length)
+            );
+          } else {
+            cameraPos = new THREE.Vector3(targetPoint.x, targetPoint.y + 10, targetPoint.z + 15);
+          }
+          flyTo(cameraPos, targetPoint);
+        } else {
+          const currentNodes = (propsRef.current.nodes && propsRef.current.nodes.length > 0)
+            ? propsRef.current.nodes
+            : NODES;
+          const userNode = currentNodes.find(n => n.id === (startNodeId || 'PointA'));
+          if (!userNode) return;
+          const worldPos = engineRef.current.mapToWorld(userNode.x, userNode.y);
+          const targetPos = new THREE.Vector3(worldPos.x, worldPos.y + 18, worldPos.z + 16);
+          flyTo(targetPos, worldPos);
+        }
+      },
+      flyToPlace: (place) => {
+        if (!engineRef.current.mapToWorld || !place) return;
+        const worldPos = engineRef.current.mapToWorld(place.x, place.y);
+        const targetPos = new THREE.Vector3(worldPos.x, worldPos.y + 20, worldPos.z + 18);
+        flyTo(targetPos, worldPos);
+      },
+      fitOverview: () => {
+        engineRef.current.userIsInteracting = false;
+        const { mapToWorld } = engineRef.current;
+        if (!mapToWorld) return;
+
+        if (routePlanner && routePlanner.length > 1) {
+          let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+          routePlanner.forEach((p) => {
+            const world = mapToWorld(p.lat, p.lng);
+            if (world.x < minX) minX = world.x;
+            if (world.x > maxX) maxX = world.x;
+            if (world.z < minZ) minZ = world.z;
+            if (world.z > maxZ) maxZ = world.z;
+          });
+          const centerX = (minX + maxX) / 2;
+          const centerZ = (minZ + maxZ) / 2;
+          const spanX = maxX - minX;
+          const spanZ = maxZ - minZ;
+          const maxSpan = Math.max(spanX, spanZ, 18);
+          const targetCenter = new THREE.Vector3(centerX, 0.2, centerZ);
+          const cameraPos = new THREE.Vector3(
+            centerX,
+            targetCenter.y + maxSpan * 1.6 + 12,
+            centerZ + maxSpan * 1.1 + 8
+          );
+          flyTo(cameraPos, targetCenter);
+        } else {
+          const targetCenter = new THREE.Vector3(0, 0.2, 0);
+          const cameraPos = new THREE.Vector3(0, 50, 44);
+          flyTo(cameraPos, targetCenter);
+        }
+      },
+    });
+  }, [onRegisterControls, flyTo, resetNorth, routePlanner, currentStepIndex, is3D, startNodeId]);
+
+  //! RENDER CONSTANT SCREEN-SPACE ROUTE (Three.js Line2)
+  useEffect(() => {
+    const updateRouteLines = () => {
+      const { scene, mapToWorld, resolution } = engineRef.current;
+      if (!scene || !mapToWorld) return;
+
+      // Clean up previous lines
+      if (engineRef.current.lineCasing) {
+        scene.remove(engineRef.current.lineCasing);
+        engineRef.current.lineCasing.geometry.dispose();
+        engineRef.current.lineCasing.material.dispose();
+        engineRef.current.lineCasing = null;
+      }
+      if (engineRef.current.lineActive) {
+        scene.remove(engineRef.current.lineActive);
+        engineRef.current.lineActive.geometry.dispose();
+        engineRef.current.lineActive.material.dispose();
+        engineRef.current.lineActive = null;
+      }
+      if (engineRef.current.lineWalked) {
+        scene.remove(engineRef.current.lineWalked);
+        engineRef.current.lineWalked.geometry.dispose();
+        engineRef.current.lineWalked.material.dispose();
+        engineRef.current.lineWalked = null;
+      }
+
+      if (!routePlanner || routePlanner.length < 2) return;
+
+      const fullPositions = [];
+      const walkedPositions = [];
+      const remainingPositions = [];
+
+      routePlanner.forEach((p, idx) => {
+        const world = mapToWorld(p.lat, p.lng);
+        // Slightly elevated above map plane to avoid z-fighting
+        const y = 0.25;
+        fullPositions.push(world.x, y, world.z);
+
+        if (idx <= currentStepIndex) {
+          walkedPositions.push(world.x, y + 0.01, world.z);
+        }
+        if (idx >= currentStepIndex) {
+          remainingPositions.push(world.x, y + 0.02, world.z);
+        }
+      });
+
+      // 1. Casing line: 10px constant screen-space width (#FFFFFF)
+      const casingGeo = new LineGeometry();
+      casingGeo.setPositions(fullPositions);
+      const casingMat = new LineMaterial({
+        color: 0xFFFFFF,
+        linewidth: 10, // 10px screen space
+        resolution: resolution,
+        depthTest: false,
+        transparent: true,
+        opacity: 0.95,
+      });
+      const casingLine = new Line2(casingGeo, casingMat);
+      casingLine.renderOrder = 2;
+      scene.add(casingLine);
+      engineRef.current.lineCasing = casingLine;
+
+      // 2. Walked portion: 6px constant screen-space width (#9AA0A6)
+      if (walkedPositions.length >= 6) {
+        const walkedGeo = new LineGeometry();
+        walkedGeo.setPositions(walkedPositions);
+        const walkedMat = new LineMaterial({
+          color: 0x9AA0A6,
+          linewidth: 6, // 6px screen space
+          resolution: resolution,
+          depthTest: false,
+          transparent: true,
+          opacity: 0.95,
+        });
+        const walkedLine = new Line2(walkedGeo, walkedMat);
+        walkedLine.renderOrder = 3;
+        scene.add(walkedLine);
+        engineRef.current.lineWalked = walkedLine;
+      }
+
+      // 3. Active remaining portion: 6px constant screen-space width (#1A73E8) with animated navigation flow
+      if (remainingPositions.length >= 6) {
+        const activeGeo = new LineGeometry();
+        activeGeo.setPositions(remainingPositions);
+        const activeMat = new LineMaterial({
+          color: isDarkMode ? 0x8AB4F8 : 0x1A73E8,
+          linewidth: 6, // 6px screen space
+          resolution: resolution,
+          dashed: true,
+          dashScale: 0.25,
+          dashSize: 2.5,
+          gapSize: 1.5,
+          depthTest: false,
+          transparent: true,
+          opacity: 1.0,
+        });
+        const activeLine = new Line2(activeGeo, activeMat);
+        activeLine.computeLineDistances();
+        activeLine.renderOrder = 4;
+        scene.add(activeLine);
+        engineRef.current.lineActive = activeLine;
+      }
+
+      // 4. Update 3D Destination Beacon position
+      if (engineRef.current.destBeacon) {
+        if (routePlanner && routePlanner.length > 0) {
+          const destStep = routePlanner[routePlanner.length - 1];
+          const destPos = mapToWorld(destStep.lat, destStep.lng);
+          engineRef.current.destBeacon.position.set(destPos.x, 0.22, destPos.z);
+          engineRef.current.destBeacon.visible = true;
+        } else {
+          engineRef.current.destBeacon.visible = false;
+        }
+      }
+    };
+
+    updateRouteLines();
+    window.addEventListener('mapEngineReady', updateRouteLines);
+    return () => window.removeEventListener('mapEngineReady', updateRouteLines);
+  }, [routePlanner, currentStepIndex, isDarkMode]);
+
+  //! AUTO-FIT CAMERA TO ROUTE OR FOCUS CURRENT STEP
+  useEffect(() => {
+    const updateCamera = () => {
+      if (!engineRef.current?.mapToWorld || !routePlanner.length) return;
+      const { camera, controls, mapToWorld } = engineRef.current;
+      if (!camera || !controls) return;
+
+      const step = routePlanner[currentStepIndex];
+      if (!step) return;
+
+      const targetPoint = mapToWorld(step.lat, step.lng);
+      const nextStep = routePlanner[currentStepIndex + 1];
+
+      let cameraPos;
+      if (!is3D) {
+        cameraPos = new THREE.Vector3(targetPoint.x, targetPoint.y + 14, targetPoint.z + 0.001);
+      } else if (nextStep) {
+        const nextNode = mapToWorld(nextStep.lat, nextStep.lng);
+        const dx = nextNode.x - targetPoint.x;
+        const dz = nextNode.z - targetPoint.z;
+        const length = Math.hypot(dx, dz) || 1;
+        const distance = 3;
+        const elevation = 2;
+        cameraPos = new THREE.Vector3(
+          targetPoint.x - distance * (dx / length),
+          targetPoint.y + elevation,
+          targetPoint.z - distance * (dz / length)
+        );
+      } else if (currentStepIndex > 0 && routePlanner[currentStepIndex - 1]) {
+        // At arrival: camera looks along approaching road toward destination building
+        const prevStep = routePlanner[currentStepIndex - 1];
+        const prevNode = mapToWorld(prevStep.lat, prevStep.lng);
+        const dx = targetPoint.x - prevNode.x;
+        const dz = targetPoint.z - prevNode.z;
+        const length = Math.hypot(dx, dz) || 1;
+        const distance = 4;
+        const elevation = 3;
+        cameraPos = new THREE.Vector3(
+          targetPoint.x - distance * (dx / length),
+          targetPoint.y + elevation,
+          targetPoint.z - distance * (dz / length)
+        );
+      } else {
+        cameraPos = new THREE.Vector3(targetPoint.x, targetPoint.y + 10, targetPoint.z + 15);
+      }
+
+      engineRef.current.userIsInteracting = false;
+
+      // On initial camera initialization, snap directly without long initial drift
+      if (!engineRef.current.hasInitializedCamera) {
+        engineRef.current.hasInitializedCamera = true;
+        camera.position.copy(cameraPos);
+        controls.target.copy(targetPoint);
+        controls.update();
+        engineRef.current.targetCameraPos = cameraPos.clone();
+        engineRef.current.targetControlsTarget = targetPoint.clone();
+      } else {
+        flyTo(cameraPos, targetPoint);
+      }
+    };
+
+    updateCamera();
+    window.addEventListener('mapEngineReady', updateCamera);
+    return () => window.removeEventListener('mapEngineReady', updateCamera);
+  }, [currentStepIndex, routePlanner, is3D, flyTo]);
 
   return (
-    <div
-      ref={mountRef}
-      style={{
-        width: '100%',
-        height: '100%',
-        position: 'absolute',
-        top: 0,
-        left: 0,
-      }}
-    />
-  )
+    <div style={{ width: '100%', height: '100%', position: 'relative', overflow: 'hidden' }}>
+      {/* Three.js Canvas Container */}
+      <div 
+        ref={mountRef} 
+        style={{ 
+          width: '100%', 
+          height: '100%', 
+          position: 'absolute', 
+          top: 0, 
+          left: 0,
+          touchAction: 'none', // Applied only to canvas so page and sheet still scroll!
+          cursor: isPickingLocation ? 'crosshair' : 'default',
+        }} 
+        aria-label="Interactive 3D campus map canvas. Use arrow keys to pan, plus and minus to zoom."
+        role="application"
+        tabIndex={0}
+      />
+
+      {/* Screen-Space Overlays: Constant Size Markers & Halo Labels */}
+      <div className="map-overlay-layer" aria-hidden="false">
+        {projectedMarkers.map((marker) => {
+          const { node, screenX, screenY, zoomTier, isStart, isDest, isSelected, isUserAvatar, headingDeg } = marker;
+
+          return (
+            <div
+              key={node.id}
+              className={`map-marker-anchor ${isAdminMode && !isUserAvatar ? 'admin-marker' : ''}`}
+              style={{
+                left: `${screenX}px`,
+                top: `${screenY}px`,
+                zIndex: marker.priority,
+              }}
+              onClick={() => {
+                if (!isUserAvatar) {
+                  if (isAdminMode && onAdminEditNode) {
+                    onAdminEditNode(node);
+                  } else {
+                    onSelectPlace(node);
+                  }
+                }
+              }}
+              role="button"
+              tabIndex={isUserAvatar ? -1 : 0}
+              onKeyDown={(e) => {
+                if (!isUserAvatar && (e.key === 'Enter' || e.key === ' ')) {
+                  e.preventDefault();
+                  if (isAdminMode && onAdminEditNode) {
+                    onAdminEditNode(node);
+                  } else {
+                    onSelectPlace(node);
+                  }
+                }
+              }}
+              aria-label={isUserAvatar ? "Your current location" : `${isAdminMode ? 'Edit place ' : ''}${node.name}, ${node.category || ''}, ${node.blockCode || ''}`}
+              title={isAdminMode && !isUserAvatar ? `Edit ${node.name} (Admin Mode)` : undefined}
+            >
+              {/* Admin Mode Quick Edit Pencil Indicator */}
+              {!isUserAvatar && isAdminMode && (
+                <span className="marker-admin-badge" title={`Edit ${node.name}`}>
+                  ✎
+                </span>
+              )}
+              {/* User Location Avatar with Animated Pulse and Heading Cone */}
+              {isUserAvatar && (
+                <div className="marker-user" title="Your current location">
+                  <div className="user-pulse-halo" />
+                  {headingDeg !== null && (
+                    <div 
+                      className="user-heading-cone" 
+                      style={{ transform: `rotate(${headingDeg}deg)` }} 
+                    />
+                  )}
+                  <div className="user-center-dot" />
+                </div>
+              )}
+
+              {/* Origin Marker */}
+              {!isUserAvatar && isStart && (
+                <div className="marker-origin" title={`Starting point: ${node.name}`} />
+              )}
+
+              {/* Destination Marker */}
+              {!isUserAvatar && isDest && (
+                <div className="marker-destination" title={`Destination: ${node.name}`}>
+                  <svg viewBox="0 0 24 24" className="dest-pin-svg" aria-hidden="true">
+                    <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" />
+                  </svg>
+                </div>
+              )}
+
+              {/* Waypoint Marker (Only shown in Admin Mode) */}
+              {!isUserAvatar && marker.isWaypoint && (
+                <div className="marker-waypoint" title={`Waypoint: ${node.name}`}>
+                  <div className="waypoint-inner-dot" />
+                </div>
+              )}
+
+              {/* Standard POI Marker */}
+              {!isUserAvatar && !marker.isWaypoint && !isStart && !isDest && showPOIs && (
+                <div className={`marker-poi category-${(node.category || 'other').toLowerCase()} ${marker.isCatMatch ? 'category-highlighted' : ''}`}>
+                  {getCategoryIcon(node.category)}
+                </div>
+              )}
+
+              {/* 2px Halo Label: Reveals full name close up, code at mid zoom, always for destination */}
+              {!isUserAvatar && !marker.isWaypoint && (isDest || isStart || isSelected || zoomTier === 'close' || (zoomTier === 'mid' && node.blockCode)) && (
+                <span className={`marker-label ${isDest ? 'destination-label' : ''} ${zoomTier === 'mid' && !isDest ? 'code-only' : ''}`}>
+                  {isDest || isSelected || zoomTier === 'close'
+                    ? (node.shortName || node.name)
+                    : (node.blockCode || node.shortName || node.name)}
+                </span>
+              )}
+
+              {/* Waypoint Label (Admin Mode) */}
+              {!isUserAvatar && marker.isWaypoint && (
+                <span className="marker-label waypoint-label">
+                  {node.shortName || node.name}
+                </span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
