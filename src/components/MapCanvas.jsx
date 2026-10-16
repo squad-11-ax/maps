@@ -53,11 +53,41 @@ export default function MapCanvas({ routePlanner = [], currentStepIndex = 0 }) {
     // Store objects for external updates
     engineRef.current = { camera, controls, mapToWorld: null, scene, offsetCamera, targetCameraPos: null, targetControlsTarget: null };
 
-    textureLoader.load('/photo.png', (mapTexture) => {
-      const imageWidth = mapTexture.image.width;
-      const imageHeight = mapTexture.image.height;
-      const aspectRatio = imageHeight / imageWidth;
+    const loadMapTexture = (url) => {
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => {
+          const width = img.naturalWidth || img.width || 1810;
+          const height = img.naturalHeight || img.height || 1210;
+          const scale = 2; // 2x scale for sharp vector rasterization
+          const canvas = document.createElement('canvas');
+          canvas.width = width * scale;
+          canvas.height = height * scale;
+          const ctx = canvas.getContext('2d');
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = 'high';
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
+          const texture = new THREE.CanvasTexture(canvas);
+          texture.colorSpace = THREE.SRGBColorSpace;
+          texture.generateMipmaps = true;
+          resolve({ texture, aspectRatio: height / width });
+        };
+        img.onerror = (err) => {
+          console.error("Failed to load SVG into canvas, falling back to TextureLoader", err);
+          textureLoader.load(encodeURI(url), (fallbackTex) => {
+            const w = fallbackTex.image?.width || 1810;
+            const h = fallbackTex.image?.height || 1210;
+            fallbackTex.colorSpace = THREE.SRGBColorSpace;
+            resolve({ texture: fallbackTex, aspectRatio: h / w });
+          });
+        };
+        img.src = encodeURI(url);
+      });
+    };
+
+    loadMapTexture('/enhaned maps.svg').then(({ texture: mapTexture, aspectRatio }) => {
       const mapWidth = MAP_BASE_WIDTH;
       const mapHeight = MAP_BASE_WIDTH * aspectRatio;
 
@@ -226,8 +256,8 @@ export default function MapCanvas({ routePlanner = [], currentStepIndex = 0 }) {
         const dx = nextNode.x - targetPoint.x;
         const dz = nextNode.z - targetPoint.z;
         const length = Math.hypot(dx, dz) || 1;
-        const distance = 15;
-        const elevation = 7;
+        const distance = 3;
+        const elevation =2;
         cameraPos = new THREE.Vector3(
           targetPoint.x - distance * (dx / length),
           targetPoint.y + elevation,

@@ -95,7 +95,7 @@ export const NODES = [
     color: '#4285F4',
     icon: '📍',
     x: 0.22,
-    y: 0.935,
+    y: 0.69,
     z: 0.02,
   },
   {
