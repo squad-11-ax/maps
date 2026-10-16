@@ -30,6 +30,8 @@ export default function App() {
   const [stepFreeOnly, setStepFreeOnly] = useState(false);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [isNavigating, setIsNavigating] = useState(false);
+  const [isSimulating, setIsSimulating] = useState(false);
+  const [activeCategory, setActiveCategory] = useState(null);
 
   // Selected Place for PlaceCard
   const [selectedPlace, setSelectedPlace] = useState(null);
@@ -77,6 +79,27 @@ export default function App() {
     setPrevRouteKey(routeKey);
     setCurrentStepIndex(0);
   }
+
+  // Auto-advance walking simulation
+  useEffect(() => {
+    if (!isNavigating || !isSimulating) return;
+
+    const timer = setInterval(() => {
+      setCurrentStepIndex((prev) => {
+        if (prev >= routeSteps.length - 1) {
+          setIsSimulating(false);
+          return prev;
+        }
+        const next = prev + 1;
+        if (next >= routeSteps.length - 1) {
+          setIsSimulating(false);
+        }
+        return next;
+      });
+    }, 2800);
+
+    return () => clearInterval(timer);
+  }, [isNavigating, isSimulating, routeSteps.length]);
 
   // Current and Next Step for Live Navigation
   const currentStep = routeSteps[currentStepIndex] || null;
@@ -199,17 +222,23 @@ export default function App() {
             onToggle3D={() => setIs3D(prev => !prev)}
             showPOIs={showPOIs}
             onTogglePOIs={() => setShowPOIs(prev => !prev)}
+            activeCategory={activeCategory}
             cameraHeading={cameraHeading}
             onCameraHeadingChange={setCameraHeading}
             isDarkMode={isDarkMode}
             onRegisterControls={(api) => { canvasControlRef.current = api; }}
             isNavigating={isNavigating}
+            isSimulating={isSimulating}
+            onToggleSimulate={() => setIsSimulating(prev => !prev)}
             currentStep={currentStep}
             nextStep={nextStep}
             totalSteps={routeSteps.length}
             onNextStep={handleNextStep}
             onPrevStep={handlePrevStep}
-            onExitNav={() => setIsNavigating(false)}
+            onExitNav={() => {
+              setIsNavigating(false);
+              setIsSimulating(false);
+            }}
           />
         </div>
 
@@ -218,6 +247,7 @@ export default function App() {
           <GlobalSearchPill
             onSelectPlace={handleSelectPlaceFromMapOrSearch}
             onOpenDirections={handleGetDirectionsToPlace}
+            onSelectCategory={setActiveCategory}
             selectedPlace={selectedPlace}
           />
         )}
@@ -240,7 +270,10 @@ export default function App() {
               setIsNavigating(true);
               setMobileSheetSnap('peek');
             }}
-            onStopNavigation={() => setIsNavigating(false)}
+            onStopNavigation={() => {
+              setIsNavigating(false);
+              setIsSimulating(false);
+            }}
             stepFreeOnly={stepFreeOnly}
             onToggleStepFree={setStepFreeOnly}
             onCloseDirections={() => setActiveTab('map')}
@@ -282,7 +315,10 @@ export default function App() {
                 setIsNavigating(true);
                 setMobileSheetSnap('peek');
               }}
-              onStopNavigation={() => setIsNavigating(false)}
+              onStopNavigation={() => {
+                setIsNavigating(false);
+                setIsSimulating(false);
+              }}
               stepFreeOnly={stepFreeOnly}
               onToggleStepFree={setStepFreeOnly}
               onCloseDirections={() => setActiveTab('map')}

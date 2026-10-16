@@ -29,6 +29,7 @@ const CATEGORY_CHIPS = [
 export default function GlobalSearchPill({ 
   onSelectPlace, 
   onOpenDirections,
+  onSelectCategory,
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -181,6 +182,7 @@ export default function GlobalSearchPill({
               e.stopPropagation();
               setQuery('');
               setActiveCategory(null);
+              onSelectCategory?.(null);
               inputRef.current?.focus();
             }}
             aria-label="Clear search input"
@@ -207,8 +209,10 @@ export default function GlobalSearchPill({
               onClick={() => {
                 if (isActive) {
                   setActiveCategory(null);
+                  onSelectCategory?.(null);
                 } else {
                   setActiveCategory(chip.id);
+                  onSelectCategory?.(chip.id);
                   setIsOpen(true);
                 }
               }}

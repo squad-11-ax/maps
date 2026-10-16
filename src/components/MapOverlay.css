@@ -136,6 +136,18 @@
 .marker-poi.category-washrooms { color: var(--poi-washrooms); }
 .marker-poi.category-study { color: var(--poi-study); }
 
+.marker-poi.category-highlighted {
+  transform: scale(1.25);
+  box-shadow: 0 0 0 3px var(--route), 0 4px 14px rgba(26, 115, 232, 0.45);
+  animation: poiPulseAttention 2s ease-in-out infinite;
+  z-index: 5;
+}
+
+@keyframes poiPulseAttention {
+  0%, 100% { transform: scale(1.22); }
+  50% { transform: scale(1.36); }
+}
+
 /* --- Building Labels with 2px White Halo --- */
 .marker-label {
   margin-top: 4px;

@@ -18,11 +18,14 @@ export default function MapContainer({
   onToggle3D,
   showPOIs = true,
   onTogglePOIs,
+  activeCategory = null,
   cameraHeading = 0,
   onCameraHeadingChange,
   isDarkMode = false,
   onRegisterControls = null,
   isNavigating = false,
+  isSimulating = false,
+  onToggleSimulate,
   currentStep = null,
   nextStep = null,
   totalSteps = 0,
@@ -59,6 +62,7 @@ export default function MapContainer({
         onSelectPlace={onSelectPlace}
         is3D={is3D}
         showPOIs={showPOIs}
+        activeCategory={activeCategory}
         onCameraHeadingChange={onCameraHeadingChange}
         isDarkMode={isDarkMode}
         onRegisterControls={handleRegisterControls}
@@ -73,6 +77,7 @@ export default function MapContainer({
         is3D={is3D}
         onToggle3D={onToggle3D}
         onLocateMe={() => localControlsRef.current?.locateMe()}
+        onFitOverview={() => localControlsRef.current?.fitOverview()}
         showPOIs={showPOIs}
         onTogglePOIs={onTogglePOIs}
       />
@@ -81,6 +86,7 @@ export default function MapContainer({
       {selectedPlace && (
         <PlaceCard
           place={selectedPlace}
+          userLocationId={startNodeId || 'PointA'}
           onClose={onClosePlace}
           onGetDirections={onGetDirections}
           onStartHere={onStartHere}
@@ -96,6 +102,8 @@ export default function MapContainer({
           totalSteps={totalSteps}
           onNext={onNextStep}
           onPrev={onPrevStep}
+          isSimulating={isSimulating}
+          onToggleSimulate={onToggleSimulate}
           onExit={onExitNav}
         />
       )}

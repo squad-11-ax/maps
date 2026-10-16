@@ -76,6 +76,36 @@
   color: var(--badge-success-text);
 }
 
+.open-badge {
+  background: var(--badge-success-bg);
+  color: var(--badge-success-text);
+  font-weight: var(--font-semibold);
+}
+
+.open-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.place-card-icon-btn {
+  width: var(--touch-target-min);
+  height: var(--touch-target-min);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: var(--text-2);
+  background: var(--surface-2);
+  transition: all var(--motion-fast);
+}
+
+.place-card-icon-btn:hover {
+  background: var(--surface-3);
+  color: var(--text);
+}
+
 .place-card-close-btn {
   width: var(--touch-target-min);
   height: var(--touch-target-min);
@@ -92,6 +122,23 @@
 .place-card-close-btn:hover {
   background: var(--surface-3);
   color: var(--text);
+}
+
+.place-walk-estimate {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 6px 12px;
+  border-radius: var(--radius-md);
+  background: rgba(26, 115, 232, 0.08);
+  color: var(--route);
+  font-size: var(--text-xs);
+  margin-top: 4px;
+}
+
+.walk-icon {
+  flex-shrink: 0;
+  color: var(--route);
 }
 
 .place-card-body {

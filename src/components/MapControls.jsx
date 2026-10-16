@@ -3,7 +3,8 @@ import {
   Minus, 
   Compass, 
   Layers, 
-  Crosshair 
+  Crosshair,
+  Maximize2
 } from 'lucide-react';
 import './MapControls.css';
 
@@ -15,6 +16,7 @@ export default function MapControls({
   is3D = true,
   onToggle3D,
   onLocateMe,
+  onFitOverview,
   showPOIs = true,
   onTogglePOIs,
 }) {
@@ -83,6 +85,19 @@ export default function MapControls({
       >
         <Crosshair size={20} aria-hidden="true" />
       </button>
+
+      {/* Overview / Fit Entire Route or Campus */}
+      {onFitOverview && (
+        <button
+          type="button"
+          className="map-control-btn overview-btn"
+          onClick={onFitOverview}
+          aria-label="Fit route overview or whole campus"
+          title="Overview / Fit route"
+        >
+          <Maximize2 size={19} aria-hidden="true" />
+        </button>
+      )}
 
       {/* Layers / POI Visibility */}
       <button

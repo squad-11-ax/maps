@@ -29,6 +29,7 @@ export default function MapCanvas({
   onSelectPlace,
   is3D = true,
   showPOIs = true,
+  activeCategory = null,
   onCameraHeadingChange,
   isDarkMode = false,
   onRegisterControls = null,
@@ -45,6 +46,7 @@ export default function MapCanvas({
     onCameraHeadingChange,
     is3D,
     showPOIs,
+    activeCategory,
   });
   useEffect(() => {
     propsRef.current = {
@@ -56,6 +58,7 @@ export default function MapCanvas({
       onCameraHeadingChange,
       is3D,
       showPOIs,
+      activeCategory,
     };
   });
 
@@ -69,6 +72,7 @@ export default function MapCanvas({
     targetControlsTarget: null,
     userIsInteracting: false,
     hasInitializedCamera: false,
+    destBeacon: null,
     lineCasing: null,
     lineActive: null,
     lineWalked: null,
@@ -216,6 +220,46 @@ export default function MapCanvas({
       mapMesh.position.y = 0.05;
       scene.add(mapMesh);
 
+      // Soft architectural ambient drop shadow under campus map
+      const shadowGeo = new THREE.PlaneGeometry(mapWidth + 5, mapHeight + 5);
+      const shadowCanvas = document.createElement('canvas');
+      shadowCanvas.width = 128;
+      shadowCanvas.height = 128;
+      const sCtx = shadowCanvas.getContext('2d');
+      const grad = sCtx.createRadialGradient(64, 64, 45, 64, 64, 64);
+      grad.addColorStop(0, 'rgba(0, 0, 0, 0.35)');
+      grad.addColorStop(0.85, 'rgba(0, 0, 0, 0.08)');
+      grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      sCtx.fillStyle = grad;
+      sCtx.fillRect(0, 0, 128, 128);
+      const shadowTex = new THREE.CanvasTexture(shadowCanvas);
+      const shadowMat = new THREE.MeshBasicMaterial({
+        map: shadowTex,
+        transparent: true,
+        opacity: isDarkMode ? 0.45 : 0.22,
+        depthWrite: false,
+      });
+      const shadowMesh = new THREE.Mesh(shadowGeo, shadowMat);
+      shadowMesh.rotation.x = -Math.PI / 2;
+      shadowMesh.position.y = 0.02;
+      scene.add(shadowMesh);
+
+      // 3D Destination Beacon Ring (radiates at target destination)
+      const ringGeo = new THREE.RingGeometry(0.7, 1.25, 32);
+      const ringMat = new THREE.MeshBasicMaterial({
+        color: 0xD93025,
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 0.7,
+        depthWrite: false,
+      });
+      const beaconMesh = new THREE.Mesh(ringGeo, ringMat);
+      beaconMesh.rotation.x = -Math.PI / 2;
+      beaconMesh.position.set(0, 0.21, 0);
+      beaconMesh.visible = false;
+      scene.add(beaconMesh);
+      engineRef.current.destBeacon = beaconMesh;
+
       const mapToWorld = (u, v) => {
         const x = (u - 0.5) * mapWidth;
         const z = (v - 0.5) * mapHeight;
@@ -323,6 +367,19 @@ export default function MapCanvas({
         }
       }
 
+      // Animate Destination 3D Beacon Pulse
+      if (engineRef.current.destBeacon && engineRef.current.destBeacon.visible) {
+        const pulse = (Math.sin(performance.now() * 0.005) + 1) * 0.5;
+        const scale = 1.0 + pulse * 0.7;
+        engineRef.current.destBeacon.scale.set(scale, scale, 1);
+        engineRef.current.destBeacon.material.opacity = 0.75 - pulse * 0.5;
+      }
+
+      // Animate Active Route Flow
+      if (engineRef.current.lineActive) {
+        engineRef.current.lineActive.material.dashOffset -= 0.035;
+      }
+
       // Clamp controls.target to campus bounds to prevent void panning
       controls.target.x = THREE.MathUtils.clamp(controls.target.x, -55, 55);
       controls.target.z = THREE.MathUtils.clamp(controls.target.z, -45, 45);
@@ -357,6 +414,7 @@ export default function MapCanvas({
           selectedPlace: curSelected,
           routePlanner: curRoute,
           currentStepIndex: curStepIdx,
+          activeCategory: curCat,
         } = propsRef.current;
 
         // 1. Campus POI & Building Markers
@@ -372,6 +430,12 @@ export default function MapCanvas({
             const isStart = node.id === curStart;
             const isDest = node.id === curEnd;
             const isSelected = curSelected?.id === node.id;
+            const isCatMatch = curCat && curCat !== 'all' && node.category === curCat;
+
+            // If a category filter is active, only show matching POIs or active route endpoints
+            if (curCat && curCat !== 'all' && !isCatMatch && !isStart && !isDest && !isSelected) {
+              return;
+            }
 
             markers.push({
               node,
@@ -381,8 +445,9 @@ export default function MapCanvas({
               isStart,
               isDest,
               isSelected,
+              isCatMatch,
               isUserAvatar: false,
-              priority: isDest ? 100 : isStart ? 90 : isSelected ? 80 : 10,
+              priority: isDest ? 100 : isStart ? 90 : isSelected ? 80 : isCatMatch ? 75 : 10,
             });
           }
         });
@@ -608,6 +673,38 @@ export default function MapCanvas({
         const targetPos = new THREE.Vector3(worldPos.x, worldPos.y + 20, worldPos.z + 18);
         flyTo(targetPos, worldPos);
       },
+      fitOverview: () => {
+        engineRef.current.userIsInteracting = false;
+        const { mapToWorld } = engineRef.current;
+        if (!mapToWorld) return;
+
+        if (routePlanner && routePlanner.length > 1) {
+          let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+          routePlanner.forEach((p) => {
+            const world = mapToWorld(p.lat, p.lng);
+            if (world.x < minX) minX = world.x;
+            if (world.x > maxX) maxX = world.x;
+            if (world.z < minZ) minZ = world.z;
+            if (world.z > maxZ) maxZ = world.z;
+          });
+          const centerX = (minX + maxX) / 2;
+          const centerZ = (minZ + maxZ) / 2;
+          const spanX = maxX - minX;
+          const spanZ = maxZ - minZ;
+          const maxSpan = Math.max(spanX, spanZ, 18);
+          const targetCenter = new THREE.Vector3(centerX, 0.2, centerZ);
+          const cameraPos = new THREE.Vector3(
+            centerX,
+            targetCenter.y + maxSpan * 1.6 + 12,
+            centerZ + maxSpan * 1.1 + 8
+          );
+          flyTo(cameraPos, targetCenter);
+        } else {
+          const targetCenter = new THREE.Vector3(0, 0.2, 0);
+          const cameraPos = new THREE.Vector3(0, 50, 44);
+          flyTo(cameraPos, targetCenter);
+        }
+      },
     });
   }, [onRegisterControls, flyTo, resetNorth, routePlanner, currentStepIndex, is3D, startNodeId]);
 
@@ -691,7 +788,7 @@ export default function MapCanvas({
         engineRef.current.lineWalked = walkedLine;
       }
 
-      // 3. Active remaining portion: 6px constant screen-space width (#1A73E8)
+      // 3. Active remaining portion: 6px constant screen-space width (#1A73E8) with animated navigation flow
       if (remainingPositions.length >= 6) {
         const activeGeo = new LineGeometry();
         activeGeo.setPositions(remainingPositions);
@@ -699,14 +796,31 @@ export default function MapCanvas({
           color: isDarkMode ? 0x8AB4F8 : 0x1A73E8,
           linewidth: 6, // 6px screen space
           resolution: resolution,
+          dashed: true,
+          dashScale: 0.25,
+          dashSize: 2.5,
+          gapSize: 1.5,
           depthTest: false,
           transparent: true,
           opacity: 1.0,
         });
         const activeLine = new Line2(activeGeo, activeMat);
+        activeLine.computeLineDistances();
         activeLine.renderOrder = 4;
         scene.add(activeLine);
         engineRef.current.lineActive = activeLine;
+      }
+
+      // 4. Update 3D Destination Beacon position
+      if (engineRef.current.destBeacon) {
+        if (routePlanner && routePlanner.length > 0) {
+          const destStep = routePlanner[routePlanner.length - 1];
+          const destPos = mapToWorld(destStep.lat, destStep.lng);
+          engineRef.current.destBeacon.position.set(destPos.x, 0.22, destPos.z);
+          engineRef.current.destBeacon.visible = true;
+        } else {
+          engineRef.current.destBeacon.visible = false;
+        }
       }
     };
 
@@ -856,7 +970,7 @@ export default function MapCanvas({
 
               {/* Standard POI Marker */}
               {!isUserAvatar && !isStart && !isDest && showPOIs && (
-                <div className={`marker-poi category-${(node.category || 'other').toLowerCase()}`}>
+                <div className={`marker-poi category-${(node.category || 'other').toLowerCase()} ${marker.isCatMatch ? 'category-highlighted' : ''}`}>
                   {getCategoryIcon(node.category)}
                 </div>
               )}

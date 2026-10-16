@@ -132,6 +132,27 @@
   opacity: 0.92;
 }
 
+.banner-nav-btn.simulate-btn {
+  background: var(--surface-2);
+  color: var(--route);
+}
+
+.banner-nav-btn.simulate-btn.active {
+  background: var(--route);
+  color: var(--text-inverse);
+  box-shadow: 0 0 10px rgba(26, 115, 232, 0.45);
+}
+
+.banner-nav-btn.audio-btn {
+  background: transparent;
+  color: var(--text-2);
+}
+
+.banner-nav-btn.audio-btn:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
 .banner-exit-btn {
   width: var(--touch-target-min);
   height: var(--touch-target-min);
@@ -148,6 +169,25 @@
 .banner-exit-btn:hover {
   background: var(--surface-2);
   color: var(--text);
+}
+
+/* Progress bar along bottom of banner */
+.banner-progress-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--surface-3);
+  border-bottom-left-radius: var(--radius-lg);
+  border-bottom-right-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.banner-progress-fill {
+  height: 100%;
+  background: var(--route);
+  transition: width var(--motion-normal) ease-out;
 }
 
 /* Mobile Placement */
