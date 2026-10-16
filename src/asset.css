@@ -4,20 +4,24 @@
    ========================================================================== */
 
 #body {
-  width: 100vw;
+  width: 100%;
   height: 100vh;
   height: 100dvh;
   position: relative;
   overflow: hidden;
   background-color: var(--map-bg);
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
 .main-layout {
-  width: 100vw;
+  width: 100%;
   height: 100vh;
   height: 100dvh;
   position: relative;
   overflow: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
 /* Map Viewport Area */

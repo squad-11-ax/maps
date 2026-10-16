@@ -70,7 +70,7 @@ export default function App() {
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [isNavigating, setIsNavigating] = useState(false);
   const [isSimulating, setIsSimulating] = useState(false);
-  const [activeCategory, setActiveCategory] = useState(null);
+  const [activeCategory] = useState(null);
 
   // Selected Place for PlaceCard
   const [selectedPlace, setSelectedPlace] = useState(null);
@@ -426,13 +426,12 @@ export default function App() {
           />
         </div>
 
-        {/* Global Search Pill & Category Chips (Shown when not in directions panel) */}
+        {/* Global Search Pill (Shown when not in directions panel) */}
         {activeTab !== 'directions' && activeTab !== 'places' && !isNavigating && (
           <GlobalSearchPill
             nodes={nodes}
             onSelectPlace={handleSelectPlaceFromMapOrSearch}
             onOpenDirections={handleGetDirectionsToPlace}
-            onSelectCategory={setActiveCategory}
             selectedPlace={selectedPlace}
           />
         )}

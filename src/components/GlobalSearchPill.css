@@ -82,57 +82,6 @@
   color: var(--text);
 }
 
-/* Category Chips Bar */
-.category-chips-scroll {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  overflow-x: auto;
-  padding: 2px 2px 6px 2px;
-  scrollbar-width: none;
-  -webkit-overflow-scrolling: touch;
-}
-
-.category-chips-scroll::-webkit-scrollbar {
-  display: none;
-}
-
-.category-chip-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  height: 34px;
-  min-height: 34px;
-  padding: 0 var(--space-3);
-  border-radius: var(--radius-pill);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  box-shadow: var(--shadow-sm);
-  color: var(--text);
-  font-size: var(--text-xs);
-  font-weight: var(--font-medium);
-  white-space: nowrap;
-  transition: all var(--motion-fast);
-  cursor: pointer;
-}
-
-.category-chip-btn:hover {
-  background: var(--surface-2);
-  box-shadow: var(--shadow);
-  transform: translateY(-1px);
-}
-
-.category-chip-btn.active {
-  background: var(--route);
-  border-color: var(--route);
-  color: var(--text-inverse);
-  box-shadow: 0 2px 8px rgba(26, 115, 232, 0.4);
-}
-
-.chip-icon {
-  flex-shrink: 0;
-}
-
 /* Autocomplete Dropdown Panel */
 .search-dropdown-panel {
   background: var(--surface);
@@ -141,9 +90,17 @@
   box-shadow: var(--shadow-lg);
   max-height: 380px;
   overflow-y: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
   display: flex;
   flex-direction: column;
   animation: slideInDown var(--motion-fast) ease-out;
+}
+
+.search-dropdown-panel::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 @keyframes slideInDown {

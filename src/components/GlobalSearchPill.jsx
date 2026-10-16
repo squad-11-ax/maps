@@ -4,37 +4,18 @@ import {
   X, 
   Clock, 
   MapPin, 
-  Utensils, 
-  Bed, 
-  FlaskConical, 
-  CreditCard, 
-  Car, 
-  DoorOpen, 
-  Bath, 
   Navigation
 } from 'lucide-react';
 import { NODES } from '../data/nodesData';
 import './GlobalSearchPill.css';
 
-const CATEGORY_CHIPS = [
-  { id: 'Food', label: 'Food', icon: Utensils },
-  { id: 'Hostels', label: 'Hostels', icon: Bed },
-  { id: 'Labs', label: 'Labs', icon: FlaskConical },
-  { id: 'ATM', label: 'ATM', icon: CreditCard },
-  { id: 'Parking', label: 'Parking', icon: Car },
-  { id: 'Gates', label: 'Gates', icon: DoorOpen },
-  { id: 'Washrooms', label: 'Washrooms', icon: Bath },
-];
-
 export default function GlobalSearchPill({ 
   onSelectPlace, 
   onOpenDirections,
-  onSelectCategory,
   nodes = [],
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState('');
-  const [activeCategory, setActiveCategory] = useState(null);
   const [recents, setRecents] = useState(() => {
     try {
       const saved = localStorage.getItem('aimaps_recent_searches');
@@ -71,13 +52,8 @@ export default function GlobalSearchPill({
       // Exclude invisible waypoints from visitor search
       if (place.isWaypoint) return false;
 
-      // Category filter
-      if (activeCategory && place.category !== activeCategory) {
-        return false;
-      }
-
       if (!q) {
-        return true; // show category results or all
+        return true;
       }
 
       // Match name or shortName
@@ -97,7 +73,7 @@ export default function GlobalSearchPill({
 
       return false;
     }).slice(0, 8);
-  }, [allPlaces, query, activeCategory]);
+  }, [allPlaces, query]);
 
   // Click outside listener
   useEffect(() => {
@@ -114,7 +90,6 @@ export default function GlobalSearchPill({
     addRecent(place.name);
     setIsOpen(false);
     setQuery('');
-    setActiveCategory(null);
     onSelectPlace(place);
   };
 
@@ -187,8 +162,6 @@ export default function GlobalSearchPill({
             onClick={(e) => {
               e.stopPropagation();
               setQuery('');
-              setActiveCategory(null);
-              onSelectCategory?.(null);
               inputRef.current?.focus();
             }}
             aria-label="Clear search input"
@@ -198,44 +171,11 @@ export default function GlobalSearchPill({
         )}
       </div>
 
-      {/* Category Chips Bar */}
-      <div 
-        className="category-chips-scroll" 
-        role="region" 
-        aria-label="Filter locations by category"
-      >
-        {CATEGORY_CHIPS.map((chip) => {
-          const Icon = chip.icon;
-          const isActive = activeCategory === chip.id;
-          return (
-            <button
-              key={chip.id}
-              type="button"
-              className={`category-chip-btn ${isActive ? 'active' : ''}`}
-              onClick={() => {
-                if (isActive) {
-                  setActiveCategory(null);
-                  onSelectCategory?.(null);
-                } else {
-                  setActiveCategory(chip.id);
-                  onSelectCategory?.(chip.id);
-                  setIsOpen(true);
-                }
-              }}
-              aria-pressed={isActive}
-            >
-              <Icon size={14} aria-hidden="true" className="chip-icon" />
-              <span>{chip.label}</span>
-            </button>
-          );
-        })}
-      </div>
-
       {/* Autocomplete Dropdown Panel */}
       {isOpen && (
         <div className="search-dropdown-panel" role="listbox" id="search-results-list">
           {/* Recent Searches Header */}
-          {!query && !activeCategory && recents.length > 0 && (
+          {!query && recents.length > 0 && (
             <div className="search-section">
               <div className="search-section-header">
                 <Clock size={14} aria-hidden="true" />
@@ -257,12 +197,12 @@ export default function GlobalSearchPill({
             </div>
           )}
 
-          {/* Search / Category Results */}
+          {/* Search Results */}
           <div className="results-group">
             <div className="search-section-header">
               <MapPin size={14} aria-hidden="true" />
               <span>
-                {activeCategory ? `${activeCategory} on Campus` : query ? 'Matching Places' : 'Suggested Places'}
+                {query ? 'Matching Places' : 'Suggested Places'}
               </span>
             </div>
 

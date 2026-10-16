@@ -10,7 +10,9 @@ html, body {
   width: 100%;
   height: 100%;
   height: 100dvh;
-  overflow: hidden;
+  overflow: hidden !important;
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
   font-family: var(--font-sans);
   font-size: 16px;
   line-height: var(--leading-normal);
@@ -21,12 +23,40 @@ html, body {
   text-rendering: optimizeLegibility;
 }
 
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
 #root, #body {
   width: 100%;
   height: 100%;
   height: 100dvh;
   position: relative;
-  overflow: hidden;
+  overflow: hidden !important;
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+
+#root::-webkit-scrollbar,
+#body::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+/* Hide default browser scrollbars across all scrollable containers while preserving full scrollability */
+* {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+
+*::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
 }
 
 /* Accessibility focus-visible styles */

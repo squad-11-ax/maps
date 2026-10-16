@@ -177,9 +177,17 @@
   box-shadow: var(--shadow-lg);
   max-height: 240px;
   overflow-y: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
   z-index: 110;
   display: flex;
   flex-direction: column;
+}
+
+.dropdown-flyout-panel::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 .flyout-item {
@@ -424,6 +432,14 @@
   overflow-y: auto;
   max-height: 260px;
   padding-right: 4px;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.steps-scroll-container::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 .steps-section-heading {
