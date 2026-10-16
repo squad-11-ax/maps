@@ -34,8 +34,7 @@ export default function Navbar({
             <Navigation className="topbar-logo-icon" size={20} />
           </div>
           <div className="topbar-title-group">
-            <span className="topbar-title">CampusMap</span>
-            <span className="topbar-badge">3D Nav</span>
+            <span className="topbar-title">Maps</span>
           </div>
         </div>
 

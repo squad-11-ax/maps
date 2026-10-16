@@ -33,7 +33,7 @@ export default function AboutModal({ isOpen, onClose }) {
         <div className="modal-header">
           <div className="modal-title-wrap">
             <Navigation className="modal-icon" size={24} aria-hidden="true" />
-            <h2 id="about-modal-title" className="modal-title">CampusMap 3D</h2>
+            <h2 id="about-modal-title" className="modal-title">Maps</h2>
           </div>
           <button 
             ref={closeBtnRef}
