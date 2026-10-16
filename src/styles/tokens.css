@@ -1,0 +1,189 @@
+/* ==========================================================================
+   DESIGN TOKENS - INDUSTRY STANDARD CAMPUS NAVIGATION
+   Google Maps / Apple Maps / Mapbox design language
+   ========================================================================== */
+
+:root {
+  /* Core Brand & Navigation Colors */
+  --route: #1A73E8;
+  --route-casing: #FFFFFF;
+  --route-done: #9AA0A6;
+  --dest: #D93025; /* THE ONLY RED IN THE UI */
+  --origin: #1A73E8;
+  --user-loc: #1A73E8;
+
+  /* Surfaces & Backgrounds */
+  --surface: #FFFFFF;
+  --surface-2: #F1F3F4;
+  --surface-3: #E8EAED;
+  --surface-elevated: #FFFFFF;
+  --backdrop: rgba(32, 33, 36, 0.4);
+  --map-bg: #ECEFF1;
+  --map-fog: #ECEFF1;
+
+  /* Text & Icon Tiers */
+  --text: #202124;
+  --text-2: #5F6368;
+  --text-3: #80868B;
+  --text-inverse: #FFFFFF;
+  --text-on-route: #FFFFFF;
+
+  /* Borders & Dividers */
+  --border: #DADCE0;
+  --border-light: #E8EAED;
+  --divider: #F1F3F4;
+
+  /* Interactive States */
+  --hover-surface: rgba(32, 33, 36, 0.04);
+  --active-surface: rgba(26, 115, 232, 0.12);
+  --focus-ring-color: #1A73E8;
+  --focus-ring: 0 0 0 2px var(--surface), 0 0 0 4px var(--route);
+
+  /* Radii */
+  --radius-sm: 8px;
+  --radius-md: 12px;   /* inputs, buttons */
+  --radius-lg: 16px;   /* cards, floating panels */
+  --radius-xl: 24px;   /* bottom sheet top corners */
+  --radius-pill: 9999px;
+
+  /* Elevation & Shadows */
+  --shadow-sm: 0 1px 2px rgba(60, 64, 67, 0.2), 0 1px 3px 1px rgba(60, 64, 67, 0.1);
+  --shadow: 0 1px 3px rgba(60, 64, 67, 0.3), 0 4px 8px 3px rgba(60, 64, 67, 0.15);
+  --shadow-lg: 0 4px 12px rgba(60, 64, 67, 0.2), 0 8px 24px 6px rgba(60, 64, 67, 0.15);
+  --shadow-floating: 0 6px 20px rgba(0, 0, 0, 0.18), 0 2px 6px rgba(0, 0, 0, 0.08);
+
+  /* Spacing Scale (4/8px base) */
+  --space-05: 0.125rem; /* 2px */
+  --space-1: 0.25rem;   /* 4px */
+  --space-2: 0.5rem;    /* 8px */
+  --space-3: 0.75rem;   /* 12px */
+  --space-4: 1rem;      /* 16px */
+  --space-5: 1.25rem;   /* 20px */
+  --space-6: 1.5rem;    /* 24px */
+  --space-8: 2rem;      /* 32px */
+  --space-10: 2.5rem;   /* 40px */
+  --space-12: 3rem;     /* 48px */
+
+  /* Typography Scale */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --text-xs: 0.75rem;    /* 12px - metadata/badges only */
+  --text-sm: 0.875rem;   /* 14px - standard body minimum */
+  --text-base: 1rem;     /* 16px - inputs, headings */
+  --text-lg: 1.25rem;    /* 20px - section titles */
+  --text-xl: 1.5rem;     /* 24px - prominent titles */
+  
+  --font-regular: 400;
+  --font-medium: 500;
+  --font-semibold: 600;
+
+  /* Line Heights */
+  --leading-tight: 1.2;
+  --leading-normal: 1.5;
+
+  /* Motion & Animation */
+  --motion-fast: 150ms cubic-bezier(0.16, 1, 0.3, 1);
+  --motion-normal: 250ms cubic-bezier(0.16, 1, 0.3, 1);
+  --motion-camera: 700ms cubic-bezier(0.25, 0.1, 0.25, 1);
+
+  /* Sizing Constants */
+  --touch-target-min: 44px;
+  --input-height: 48px;
+  --topbar-height: 56px;
+  --bottombar-height: 64px;
+}
+
+/* ==========================================================================
+   DARK MODE TOKENS
+   ========================================================================== */
+:root[data-theme="dark"],
+body.dark-theme {
+  --route: #8AB4F8;
+  --route-casing: #202124;
+  --route-done: #5F6368;
+  --dest: #F28B82;
+  --origin: #8AB4F8;
+  --user-loc: #8AB4F8;
+
+  --surface: #202124;
+  --surface-2: #2B2D31;
+  --surface-3: #35383D;
+  --surface-elevated: #2B2D31;
+  --backdrop: rgba(0, 0, 0, 0.65);
+  --map-bg: #1A1A1A;
+  --map-fog: #1A1A1A;
+
+  --text: #E8EAED;
+  --text-2: #9AA0A6;
+  --text-3: #80868B;
+  --text-inverse: #202124;
+  --text-on-route: #202124;
+
+  --border: #3C4043;
+  --border-light: #4A4D51;
+  --divider: #303134;
+
+  --hover-surface: rgba(255, 255, 255, 0.08);
+  --active-surface: rgba(138, 180, 248, 0.18);
+  --focus-ring-color: #8AB4F8;
+  --focus-ring: 0 0 0 2px var(--surface), 0 0 0 4px var(--route);
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4), 0 1px 3px 1px rgba(0, 0, 0, 0.3);
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.5), 0 4px 8px 3px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 4px 12px rgba(0, 0, 0, 0.5), 0 8px 24px 6px rgba(0, 0, 0, 0.45);
+  --shadow-floating: 0 6px 24px rgba(0, 0, 0, 0.6);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --route: #8AB4F8;
+    --route-casing: #202124;
+    --route-done: #5F6368;
+    --dest: #F28B82;
+    --origin: #8AB4F8;
+    --user-loc: #8AB4F8;
+
+    --surface: #202124;
+    --surface-2: #2B2D31;
+    --surface-3: #35383D;
+    --surface-elevated: #2B2D31;
+    --backdrop: rgba(0, 0, 0, 0.65);
+    --map-bg: #1A1A1A;
+    --map-fog: #1A1A1A;
+
+    --text: #E8EAED;
+    --text-2: #9AA0A6;
+    --text-3: #80868B;
+    --text-inverse: #202124;
+    --text-on-route: #202124;
+
+    --border: #3C4043;
+    --border-light: #4A4D51;
+    --divider: #303134;
+
+    --hover-surface: rgba(255, 255, 255, 0.08);
+    --active-surface: rgba(138, 180, 248, 0.18);
+    --focus-ring-color: #8AB4F8;
+    --focus-ring: 0 0 0 2px var(--surface), 0 0 0 4px var(--route);
+
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4), 0 1px 3px 1px rgba(0, 0, 0, 0.3);
+    --shadow: 0 1px 3px rgba(0, 0, 0, 0.5), 0 4px 8px 3px rgba(0, 0, 0, 0.35);
+    --shadow-lg: 0 4px 12px rgba(0, 0, 0, 0.5), 0 8px 24px 6px rgba(0, 0, 0, 0.45);
+    --shadow-floating: 0 6px 24px rgba(0, 0, 0, 0.6);
+  }
+}
+
+/* Reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-fast: 0ms !important;
+    --motion-normal: 0ms !important;
+    --motion-camera: 0ms !important;
+  }
+  
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
