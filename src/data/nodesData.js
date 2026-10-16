@@ -583,42 +583,55 @@ function getDistance(n1, n2) {
 }
 
 // Build adjacency lists for regular and step-free routing
-const standardGraph = {};
-const stepFreeGraph = {};
+export function buildGraph(nodesList = NODES, edgesList = EDGES) {
+  const standard = {};
+  const stepFree = {};
 
-NODES.forEach((node) => {
-  standardGraph[node.id] = [];
-  stepFreeGraph[node.id] = [];
-});
+  nodesList.forEach((node) => {
+    standard[node.id] = [];
+    stepFree[node.id] = [];
+  });
 
-EDGES.forEach(([fromId, toId]) => {
-  const nodeA = NODES.find((n) => n.id === fromId);
-  const nodeB = NODES.find((n) => n.id === toId);
-  if (nodeA && nodeB) {
-    const dist = getDistance(nodeA, nodeB);
-    
-    // Standard connection
-    standardGraph[fromId].push({ id: toId, weight: dist });
-    standardGraph[toId].push({ id: fromId, weight: dist });
+  edgesList.forEach(([fromId, toId]) => {
+    const nodeA = nodesList.find((n) => n.id === fromId);
+    const nodeB = nodesList.find((n) => n.id === toId);
+    if (nodeA && nodeB) {
+      const dist = getDistance(nodeA, nodeB);
 
-    // Step-free connection (only if both nodes support step-free access)
-    if (nodeA.stepFree !== false && nodeB.stepFree !== false) {
-      stepFreeGraph[fromId].push({ id: toId, weight: dist });
-      stepFreeGraph[toId].push({ id: fromId, weight: dist });
+      // Standard connection
+      if (standard[fromId]) standard[fromId].push({ id: toId, weight: dist });
+      if (standard[toId]) standard[toId].push({ id: fromId, weight: dist });
+
+      // Step-free connection (only if both nodes support step-free access)
+      if (nodeA.stepFree !== false && nodeB.stepFree !== false) {
+        if (stepFree[fromId]) stepFree[fromId].push({ id: toId, weight: dist });
+        if (stepFree[toId]) stepFree[toId].push({ id: fromId, weight: dist });
+      }
     }
-  }
-});
+  });
+
+  return { standardGraph: standard, stepFreeGraph: stepFree };
+}
+
+const staticGraph = buildGraph(NODES, EDGES);
 
 /**
- * Dijkstra shortest path solver with support for step-free preference
+ * Dijkstra shortest path solver with support for step-free preference and dynamic nodes/edges
  */
 export function findShortestPath(startNodeId, endNodeId, options = {}) {
-  const { stepFreeOnly = false } = options;
+  const { stepFreeOnly = false, dynamicNodes = null, dynamicEdges = null } = options;
+  const nodes = dynamicNodes || NODES;
+  const edges = dynamicEdges || EDGES;
+
+  const { standardGraph, stepFreeGraph } = (dynamicNodes || dynamicEdges)
+    ? buildGraph(nodes, edges)
+    : staticGraph;
+
   const graph = stepFreeOnly ? stepFreeGraph : standardGraph;
 
   if (!startNodeId || !endNodeId) return [];
   if (startNodeId === endNodeId) {
-    const node = NODES.find((n) => n.id === startNodeId);
+    const node = nodes.find((n) => n.id === startNodeId);
     return node ? [node] : [];
   }
 
@@ -626,7 +639,7 @@ export function findShortestPath(startNodeId, endNodeId, options = {}) {
   const previous = {};
   const unvisited = new Set();
 
-  NODES.forEach((node) => {
+  nodes.forEach((node) => {
     distances[node.id] = Infinity;
     previous[node.id] = null;
     unvisited.add(node.id);
@@ -666,13 +679,13 @@ export function findShortestPath(startNodeId, endNodeId, options = {}) {
   if (distances[endNodeId] === Infinity) {
     // If step-free has no direct path, fallback to standard
     if (stepFreeOnly) {
-      return findShortestPath(startNodeId, endNodeId, { stepFreeOnly: false });
+      return findShortestPath(startNodeId, endNodeId, { ...options, stepFreeOnly: false });
     }
     return [];
   }
 
   while (curr !== null) {
-    const node = NODES.find((n) => n.id === curr);
+    const node = nodes.find((n) => n.id === curr);
     if (node) path.unshift(node);
     curr = previous[curr];
   }

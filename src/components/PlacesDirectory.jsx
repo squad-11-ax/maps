@@ -11,6 +11,7 @@ import {
 import './PlacesDirectory.css';
 
 export default function PlacesDirectory({
+  nodes = [],
   onSelectPlace,
   onGetDirections,
   onClose
@@ -18,8 +19,10 @@ export default function PlacesDirectory({
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [filterText, setFilterText] = useState('');
 
+  const allPlaces = useMemo(() => (nodes && nodes.length > 0 ? nodes : NODES), [nodes]);
+
   const filteredPlaces = useMemo(() => {
-    return NODES.filter((place) => {
+    return allPlaces.filter((place) => {
       if (selectedCategory !== 'all' && place.category !== selectedCategory) {
         return false;
       }
@@ -34,7 +37,7 @@ export default function PlacesDirectory({
         (place.subtitle && place.subtitle.toLowerCase().includes(q))
       );
     });
-  }, [selectedCategory, filterText]);
+  }, [selectedCategory, filterText, allPlaces]);
 
   return (
     <div className="places-directory-panel" role="region" aria-label="Campus Directory and Places">

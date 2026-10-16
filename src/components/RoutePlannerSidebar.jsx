@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { 
   ArrowUpDown, 
   X, 
@@ -17,6 +17,7 @@ import { NODES } from '../data/nodesData';
 import './RoutePlannerSidebar.css';
 
 export default function RoutePlannerSidebar({
+  nodes = [],
   startNodeId,
   endNodeId,
   onChangeStart,
@@ -37,9 +38,11 @@ export default function RoutePlannerSidebar({
   const [activeInput, setActiveInput] = useState(null); // 'start' | 'dest' | null
   const sidebarRef = useRef(null);
 
+  const allPlaces = useMemo(() => (nodes && nodes.length > 0 ? nodes : NODES), [nodes]);
+
   // Derived selected nodes
-  const startNode = useMemo(() => NODES.find(n => n.id === startNodeId), [startNodeId]);
-  const endNode = useMemo(() => NODES.find(n => n.id === endNodeId), [endNodeId]);
+  const startNode = useMemo(() => allPlaces.find(n => n.id === startNodeId), [allPlaces, startNodeId]);
+  const endNode = useMemo(() => allPlaces.find(n => n.id === endNodeId), [allPlaces, endNodeId]);
 
   // Adjust query strings during render when props change (React 19 pattern)
   const [prevStartNodeId, setPrevStartNodeId] = useState(startNodeId);
@@ -71,21 +74,21 @@ export default function RoutePlannerSidebar({
   }, []);
 
   // Filter autocomplete options
-  const filterNodes = (queryText) => {
+  const filterNodes = useCallback((queryText) => {
     const q = (queryText || '').trim().toLowerCase();
-    if (!q) return NODES.slice(0, 6);
+    if (!q) return allPlaces.slice(0, 6);
 
-    return NODES.filter((n) => {
+    return allPlaces.filter((n) => {
       if (n.name.toLowerCase().includes(q)) return true;
       if (n.shortName && n.shortName.toLowerCase().includes(q)) return true;
       if (n.blockCode && n.blockCode.toLowerCase().includes(q)) return true;
       if (n.aliases && n.aliases.some(a => a.toLowerCase().includes(q))) return true;
       return false;
     }).slice(0, 6);
-  };
+  }, [allPlaces]);
 
-  const startSuggestions = useMemo(() => filterNodes(startQuery), [startQuery]);
-  const destSuggestions = useMemo(() => filterNodes(destQuery), [destQuery]);
+  const startSuggestions = useMemo(() => filterNodes(startQuery), [filterNodes, startQuery]);
+  const destSuggestions = useMemo(() => filterNodes(destQuery), [filterNodes, destQuery]);
 
   // Total summary calculations
   const totalMeters = useMemo(() => {

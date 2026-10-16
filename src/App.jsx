@@ -7,7 +7,19 @@ import PlacesDirectory from './components/PlacesDirectory';
 import AboutModal from './components/AboutModal';
 import MobileBottomSheet from './components/MobileBottomSheet';
 import StatusToast from './components/StatusToast';
-import { NODES, findShortestPath, generateTurnByTurnSteps } from './data/nodesData';
+import AdminToolbar from './components/AdminToolbar';
+import NodeEditorModal from './components/NodeEditorModal';
+import NodeManagerModal from './components/NodeManagerModal';
+import DbExportModal from './components/DbExportModal';
+import { findShortestPath, generateTurnByTurnSteps } from './data/nodesData';
+import { 
+  getDatabase, 
+  addNode, 
+  updateNode, 
+  renameNode, 
+  deleteNode, 
+  resetDatabase 
+} from './data/campusDatabase';
 import './asset.css';
 
 export default function App() {
@@ -23,6 +35,32 @@ export default function App() {
   const [is3D, setIs3D] = useState(true);
   const [showPOIs, setShowPOIs] = useState(true);
   const [cameraHeading, setCameraHeading] = useState(0);
+
+  // Dynamic Campus Database State (Persisted in localStorage)
+  const [campusDb, setCampusDb] = useState(() => getDatabase());
+  const nodes = campusDb.nodes;
+  const edges = campusDb.edges;
+
+  // Admin Mode & Modals State
+  const [isAdminMode, setIsAdminMode] = useState(false);
+  const [isNodeEditorOpen, setIsNodeEditorOpen] = useState(false);
+  const [editingNode, setEditingNode] = useState(null);
+  const [isManageModalOpen, setIsManageModalOpen] = useState(false);
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [isPickingLocation, setIsPickingLocation] = useState(false);
+  const [initialCoordinates, setInitialCoordinates] = useState(null);
+  const [pendingNodeFormData, setPendingNodeFormData] = useState(null);
+
+  // Synchronize database updates across tabs and events
+  useEffect(() => {
+    const handleDbUpdate = (e) => {
+      if (e.detail?.nodes && e.detail?.edges) {
+        setCampusDb(e.detail);
+      }
+    };
+    window.addEventListener('campusDbUpdated', handleDbUpdate);
+    return () => window.removeEventListener('campusDbUpdated', handleDbUpdate);
+  }, []);
 
   // Routing State
   const [startNodeId, setStartNodeId] = useState('PointA'); // Main Campus Center
@@ -54,11 +92,15 @@ export default function App() {
     }
   }, [isDarkMode]);
 
-  // Compute Shortest Path and Turn-by-Turn Guidance
+  // Compute Shortest Path with Dynamic Database Graph
   const pathNodes = useMemo(() => {
     if (!startNodeId || !endNodeId) return [];
-    return findShortestPath(startNodeId, endNodeId, { stepFreeOnly });
-  }, [startNodeId, endNodeId, stepFreeOnly]);
+    return findShortestPath(startNodeId, endNodeId, { 
+      stepFreeOnly, 
+      dynamicNodes: nodes, 
+      dynamicEdges: edges 
+    });
+  }, [startNodeId, endNodeId, stepFreeOnly, nodes, edges]);
 
   const routeSteps = useMemo(() => {
     return generateTurnByTurnSteps(pathNodes);
@@ -105,7 +147,7 @@ export default function App() {
   const currentStep = routeSteps[currentStepIndex] || null;
   const nextStep = routeSteps[currentStepIndex + 1] || null;
 
-  // Handlers
+  // Handlers for Navigation Steps
   const handleNextStep = useCallback(() => {
     if (currentStepIndex < routeSteps.length - 1) {
       setCurrentStepIndex(prev => prev + 1);
@@ -150,13 +192,96 @@ export default function App() {
     setMobileSheetSnap('half');
   };
 
+  // Admin CRUD Handlers
+  const handleSaveNode = useCallback((nodeData, connectedNodeIds, isEditing) => {
+    if (isEditing) {
+      const res = updateNode(nodeData.id, nodeData, connectedNodeIds);
+      setCampusDb({ nodes: res.nodes, edges: res.edges });
+    } else {
+      const res = addNode(nodeData, connectedNodeIds);
+      setCampusDb({ nodes: res.nodes, edges: res.edges });
+    }
+    setPendingNodeFormData(null);
+    setInitialCoordinates(null);
+  }, []);
+
+  const handleDeleteNode = useCallback((nodeId) => {
+    const res = deleteNode(nodeId);
+    setCampusDb({ nodes: res.nodes, edges: res.edges });
+    if (selectedPlace?.id === nodeId) {
+      setSelectedPlace(null);
+    }
+    if (startNodeId === nodeId) {
+      const fallback = res.nodes.find(n => n.id !== endNodeId);
+      if (fallback) setStartNodeId(fallback.id);
+    }
+    if (endNodeId === nodeId) {
+      const fallback = res.nodes.find(n => n.id !== startNodeId);
+      if (fallback) setEndNodeId(fallback.id);
+    }
+  }, [selectedPlace, startNodeId, endNodeId]);
+
+  const handleQuickRename = useCallback((nodeId, newName, newShortName) => {
+    const res = renameNode(nodeId, newName, newShortName);
+    setCampusDb({ nodes: res.nodes, edges: res.edges });
+  }, []);
+
+  const handleResetDatabase = useCallback(() => {
+    const res = resetDatabase();
+    setCampusDb({ nodes: res.nodes, edges: res.edges });
+    setSelectedPlace(null);
+  }, []);
+
+  const handleStartPickLocation = useCallback(({ currentData, connectedEdges, isEditing }) => {
+    setPendingNodeFormData({ currentData, connectedEdges, isEditing });
+    setIsNodeEditorOpen(false);
+    setIsPickingLocation(true);
+  }, []);
+
+  const handlePickCoordinates = useCallback(({ x, y }) => {
+    setIsPickingLocation(false);
+    setInitialCoordinates({ x, y });
+
+    if (pendingNodeFormData) {
+      const updatedData = { ...pendingNodeFormData.currentData, x, y };
+      setEditingNode(pendingNodeFormData.isEditing ? updatedData : null);
+      setIsNodeEditorOpen(true);
+    } else {
+      setEditingNode(null);
+      setIsNodeEditorOpen(true);
+    }
+  }, [pendingNodeFormData]);
+
+  const handleOpenAddModal = useCallback(() => {
+    setEditingNode(null);
+    setInitialCoordinates(null);
+    setPendingNodeFormData(null);
+    setIsNodeEditorOpen(true);
+  }, []);
+
+  const handleAdminEditNode = useCallback((node) => {
+    setEditingNode(node);
+    setInitialCoordinates(null);
+    setPendingNodeFormData(null);
+    setIsNodeEditorOpen(true);
+  }, []);
+
   // Keyboard Navigation listener (WCAG AA)
   useEffect(() => {
     const handleGlobalKeyDown = (e) => {
       if (['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) return;
 
       if (e.key === 'Escape') {
-        if (selectedPlace) {
+        if (isPickingLocation) {
+          setIsPickingLocation(false);
+          if (pendingNodeFormData) setIsNodeEditorOpen(true);
+        } else if (isNodeEditorOpen) {
+          setIsNodeEditorOpen(false);
+        } else if (isManageModalOpen) {
+          setIsManageModalOpen(false);
+        } else if (isExportModalOpen) {
+          setIsExportModalOpen(false);
+        } else if (selectedPlace) {
           setSelectedPlace(null);
         } else if (isAboutOpen) {
           setIsAboutOpen(false);
@@ -172,7 +297,17 @@ export default function App() {
 
     window.addEventListener('keydown', handleGlobalKeyDown);
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
-  }, [selectedPlace, isAboutOpen, isNavigating, activeTab]);
+  }, [
+    selectedPlace, 
+    isAboutOpen, 
+    isNavigating, 
+    activeTab, 
+    isPickingLocation, 
+    isNodeEditorOpen, 
+    isManageModalOpen, 
+    isExportModalOpen, 
+    pendingNodeFormData
+  ]);
 
   return (
     <div id="body">
@@ -202,13 +337,40 @@ export default function App() {
         isDarkMode={isDarkMode}
         onToggleDarkMode={() => setIsDarkMode(prev => !prev)}
         onOpenAbout={() => setIsAboutOpen(true)}
+        isAdminMode={isAdminMode}
+        onToggleAdminMode={() => setIsAdminMode(prev => !prev)}
       />
+
+      {/* Admin Mode Floating Toolbar */}
+      {isAdminMode && (
+        <AdminToolbar
+          nodesCount={nodes.length}
+          edgesCount={edges.length}
+          onOpenAddModal={handleOpenAddModal}
+          onOpenManageModal={() => setIsManageModalOpen(true)}
+          onOpenExportModal={() => setIsExportModalOpen(true)}
+          onResetDefaults={handleResetDatabase}
+          onExitAdmin={() => {
+            setIsAdminMode(false);
+            setIsPickingLocation(false);
+          }}
+          isPickingLocation={isPickingLocation}
+          onCancelPickLocation={() => {
+            setIsPickingLocation(false);
+            if (pendingNodeFormData) {
+              setIsNodeEditorOpen(true);
+            }
+          }}
+        />
+      )}
 
       {/* Main Map Application Canvas */}
       <main id="main-content" className="main-layout">
         {/* Full-bleed 3D Map Container */}
         <div className="map-viewport">
           <MapContainer
+            nodes={nodes}
+            edges={edges}
             routePlanner={routePlannerPoints}
             currentStepIndex={currentStepIndex}
             startNodeId={startNodeId}
@@ -239,12 +401,17 @@ export default function App() {
               setIsNavigating(false);
               setIsSimulating(false);
             }}
+            isAdminMode={isAdminMode}
+            isPickingLocation={isPickingLocation}
+            onPickCoordinates={handlePickCoordinates}
+            onAdminEditNode={handleAdminEditNode}
           />
         </div>
 
         {/* Global Search Pill & Category Chips (Shown when not in directions panel) */}
         {activeTab !== 'directions' && activeTab !== 'places' && !isNavigating && (
           <GlobalSearchPill
+            nodes={nodes}
             onSelectPlace={handleSelectPlaceFromMapOrSearch}
             onOpenDirections={handleGetDirectionsToPlace}
             onSelectCategory={setActiveCategory}
@@ -255,6 +422,7 @@ export default function App() {
         {/* Desktop Directions Sidebar (Desktop only) */}
         {activeTab === 'directions' && (
           <RoutePlannerSidebar
+            nodes={nodes}
             startNodeId={startNodeId}
             endNodeId={endNodeId}
             onChangeStart={setStartNodeId}
@@ -283,6 +451,7 @@ export default function App() {
         {/* Campus Places Directory Panel (When in Places tab) */}
         {activeTab === 'places' && (
           <PlacesDirectory
+            nodes={nodes}
             onSelectPlace={(place) => {
               handleSelectPlaceFromMapOrSearch(place);
               setActiveTab('map');
@@ -300,6 +469,7 @@ export default function App() {
         >
           {activeTab === 'directions' ? (
             <RoutePlannerSidebar
+              nodes={nodes}
               startNodeId={startNodeId}
               endNodeId={endNodeId}
               onChangeStart={setStartNodeId}
@@ -349,7 +519,7 @@ export default function App() {
               </div>
               {routeSteps.length > 0 && (
                 <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-2)' }}>
-                  To {NODES.find(n => n.id === endNodeId)?.name || 'Destination'}
+                  To {nodes.find(n => n.id === endNodeId)?.name || 'Destination'}
                 </span>
               )}
             </div>
@@ -363,6 +533,46 @@ export default function App() {
         <AboutModal
           isOpen={isAboutOpen}
           onClose={() => setIsAboutOpen(false)}
+        />
+
+        {/* Admin Node Editor Modal (Add & Edit) */}
+        {isNodeEditorOpen && (
+          <NodeEditorModal
+            key={editingNode ? editingNode.id : `new-${initialCoordinates ? `${initialCoordinates.x}_${initialCoordinates.y}` : 'default'}`}
+            isOpen={isNodeEditorOpen}
+            onClose={() => {
+              setIsNodeEditorOpen(false);
+              setEditingNode(null);
+              setPendingNodeFormData(null);
+              setInitialCoordinates(null);
+            }}
+            nodeToEdit={editingNode}
+            allNodes={nodes}
+            allEdges={edges}
+            onSaveNode={handleSaveNode}
+            onDeleteNode={handleDeleteNode}
+            onStartPickLocation={handleStartPickLocation}
+            initialCoordinates={initialCoordinates}
+          />
+        )}
+
+        {/* Admin Manage Places & Quick Rename Modal */}
+        <NodeManagerModal
+          isOpen={isManageModalOpen}
+          onClose={() => setIsManageModalOpen(false)}
+          nodes={nodes}
+          onEditNode={handleAdminEditNode}
+          onQuickRename={handleQuickRename}
+          onDeleteNode={handleDeleteNode}
+          onLocateNode={handleSelectPlaceFromMapOrSearch}
+        />
+
+        {/* Admin Database Export Modal (JSON & SQL Migration for DB Developers) */}
+        <DbExportModal
+          isOpen={isExportModalOpen}
+          onClose={() => setIsExportModalOpen(false)}
+          nodes={nodes}
+          edges={edges}
         />
       </main>
     </div>

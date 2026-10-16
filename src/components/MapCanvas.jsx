@@ -21,6 +21,7 @@ import './MapOverlay.css';
 const MAP_BASE_WIDTH = 100;
 
 export default function MapCanvas({
+  nodes = [],
   routePlanner = [],
   currentStepIndex = 0,
   startNodeId = null,
@@ -33,11 +34,16 @@ export default function MapCanvas({
   onCameraHeadingChange,
   isDarkMode = false,
   onRegisterControls = null,
+  isAdminMode = false,
+  isPickingLocation = false,
+  onPickCoordinates = null,
+  onAdminEditNode = null,
 }) {
   const mountRef = useRef(null);
 
   // Synchronized props ref to avoid stale closures in animate() loop
   const propsRef = useRef({
+    nodes,
     startNodeId,
     endNodeId,
     selectedPlace,
@@ -47,9 +53,14 @@ export default function MapCanvas({
     is3D,
     showPOIs,
     activeCategory,
+    isAdminMode,
+    isPickingLocation,
+    onPickCoordinates,
+    onAdminEditNode,
   });
   useEffect(() => {
     propsRef.current = {
+      nodes,
       startNodeId,
       endNodeId,
       selectedPlace,
@@ -59,6 +70,10 @@ export default function MapCanvas({
       is3D,
       showPOIs,
       activeCategory,
+      isAdminMode,
+      isPickingLocation,
+      onPickCoordinates,
+      onAdminEditNode,
     };
   });
 
@@ -67,6 +82,8 @@ export default function MapCanvas({
     camera: null,
     controls: null,
     renderer: null,
+    mapMesh: null,
+    mapHeight: null,
     mapToWorld: null,
     targetCameraPos: null,
     targetControlsTarget: null,
@@ -260,6 +277,9 @@ export default function MapCanvas({
       scene.add(beaconMesh);
       engineRef.current.destBeacon = beaconMesh;
 
+      engineRef.current.mapMesh = mapMesh;
+      engineRef.current.mapHeight = mapHeight;
+
       const mapToWorld = (u, v) => {
         const x = (u - 0.5) * mapWidth;
         const z = (v - 0.5) * mapHeight;
@@ -349,6 +369,44 @@ export default function MapCanvas({
     };
     window.addEventListener('keydown', handleKeyDown);
 
+    //! CANVAS POINTER LISTENER FOR COORDINATE PICKING (ADMIN MODE)
+    let pointerDownPos = null;
+    const handlePointerDown = (e) => {
+      pointerDownPos = { x: e.clientX, y: e.clientY };
+    };
+    const handlePointerUp = (e) => {
+      if (!pointerDownPos) return;
+      const dist = Math.hypot(e.clientX - pointerDownPos.x, e.clientY - pointerDownPos.y);
+      pointerDownPos = null;
+      if (dist > 8) return; // Ignore drag/pan
+
+      const { isPickingLocation, onPickCoordinates } = propsRef.current;
+      if (!isPickingLocation || !onPickCoordinates) return;
+
+      const { renderer: r, camera: c, mapMesh: mesh, mapHeight: mh } = engineRef.current;
+      if (!r || !c || !mesh || !mh) return;
+
+      const rect = r.domElement.getBoundingClientRect();
+      const mouse = new THREE.Vector2(
+        ((e.clientX - rect.left) / rect.width) * 2 - 1,
+        -((e.clientY - rect.top) / rect.height) * 2 + 1
+      );
+
+      const raycaster = new THREE.Raycaster();
+      raycaster.setFromCamera(mouse, c);
+      const intersects = raycaster.intersectObject(mesh);
+
+      if (intersects.length > 0) {
+        const point = intersects[0].point;
+        const u = Number(((point.x / MAP_BASE_WIDTH) + 0.5).toFixed(3));
+        const v = Number(((point.z / mh) + 0.5).toFixed(3));
+        onPickCoordinates({ x: u, y: v });
+      }
+    };
+
+    renderer.domElement.addEventListener('pointerdown', handlePointerDown);
+    renderer.domElement.addEventListener('pointerup', handlePointerUp);
+
     //! ANIMATION RENDER LOOP
     let animationId;
     let lastHeading = null;
@@ -417,8 +475,12 @@ export default function MapCanvas({
           activeCategory: curCat,
         } = propsRef.current;
 
+        const currentNodes = (propsRef.current.nodes && propsRef.current.nodes.length > 0)
+          ? propsRef.current.nodes
+          : NODES;
+
         // 1. Campus POI & Building Markers
-        NODES.forEach((node) => {
+        currentNodes.forEach((node) => {
           const worldPos = mapToWorld(node.x, node.y);
           const screenVec = worldPos.clone().project(camera);
 
@@ -468,7 +530,7 @@ export default function MapCanvas({
             nextV = nextStepNode.lng;
           }
         } else {
-          const startNode = NODES.find((n) => n.id === (curStart || 'PointA'));
+          const startNode = currentNodes.find((n) => n.id === (curStart || 'PointA'));
           if (startNode) {
             userU = startNode.x;
             userV = startNode.y;
@@ -544,6 +606,8 @@ export default function MapCanvas({
     return () => {
       window.removeEventListener('resize', handleResize);
       window.removeEventListener('keydown', handleKeyDown);
+      renderer.domElement.removeEventListener('pointerdown', handlePointerDown);
+      renderer.domElement.removeEventListener('pointerup', handlePointerUp);
       cancelAnimationFrame(animationId);
       controls.dispose();
       renderer.dispose();
@@ -660,7 +724,10 @@ export default function MapCanvas({
           }
           flyTo(cameraPos, targetPoint);
         } else {
-          const userNode = NODES.find(n => n.id === (startNodeId || 'PointA'));
+          const currentNodes = (propsRef.current.nodes && propsRef.current.nodes.length > 0)
+            ? propsRef.current.nodes
+            : NODES;
+          const userNode = currentNodes.find(n => n.id === (startNodeId || 'PointA'));
           if (!userNode) return;
           const worldPos = engineRef.current.mapToWorld(userNode.x, userNode.y);
           const targetPos = new THREE.Vector3(worldPos.x, worldPos.y + 18, worldPos.z + 16);
@@ -906,7 +973,8 @@ export default function MapCanvas({
           position: 'absolute', 
           top: 0, 
           left: 0,
-          touchAction: 'none' // Applied only to canvas so page and sheet still scroll!
+          touchAction: 'none', // Applied only to canvas so page and sheet still scroll!
+          cursor: isPickingLocation ? 'crosshair' : 'default',
         }} 
         aria-label="Interactive 3D campus map canvas. Use arrow keys to pan, plus and minus to zoom."
         role="application"
@@ -921,25 +989,42 @@ export default function MapCanvas({
           return (
             <div
               key={node.id}
-              className="map-marker-anchor"
+              className={`map-marker-anchor ${isAdminMode && !isUserAvatar ? 'admin-marker' : ''}`}
               style={{
                 left: `${screenX}px`,
                 top: `${screenY}px`,
                 zIndex: marker.priority,
               }}
               onClick={() => {
-                if (!isUserAvatar) onSelectPlace(node);
+                if (!isUserAvatar) {
+                  if (isAdminMode && onAdminEditNode) {
+                    onAdminEditNode(node);
+                  } else {
+                    onSelectPlace(node);
+                  }
+                }
               }}
               role="button"
               tabIndex={isUserAvatar ? -1 : 0}
               onKeyDown={(e) => {
                 if (!isUserAvatar && (e.key === 'Enter' || e.key === ' ')) {
                   e.preventDefault();
-                  onSelectPlace(node);
+                  if (isAdminMode && onAdminEditNode) {
+                    onAdminEditNode(node);
+                  } else {
+                    onSelectPlace(node);
+                  }
                 }
               }}
-              aria-label={isUserAvatar ? "Your current location" : `${node.name}, ${node.category || ''}, ${node.blockCode || ''}`}
+              aria-label={isUserAvatar ? "Your current location" : `${isAdminMode ? 'Edit place ' : ''}${node.name}, ${node.category || ''}, ${node.blockCode || ''}`}
+              title={isAdminMode && !isUserAvatar ? `Edit ${node.name} (Admin Mode)` : undefined}
             >
+              {/* Admin Mode Quick Edit Pencil Indicator */}
+              {!isUserAvatar && isAdminMode && (
+                <span className="marker-admin-badge" title={`Edit ${node.name}`}>
+                  ✎
+                </span>
+              )}
               {/* User Location Avatar with Animated Pulse and Heading Cone */}
               {isUserAvatar && (
                 <div className="marker-user" title="Your current location">

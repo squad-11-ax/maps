@@ -4,7 +4,8 @@ import {
   Building2, 
   Info, 
   Sun, 
-  Moon 
+  Moon,
+  ShieldCheck
 } from 'lucide-react';
 import '../Navbar.css';
 
@@ -13,7 +14,9 @@ export default function Navbar({
   onSelectTab, 
   isDarkMode = false, 
   onToggleDarkMode,
-  onOpenAbout
+  onOpenAbout,
+  isAdminMode = false,
+  onToggleAdminMode,
 }) {
   const navTabs = [
     { id: 'map', label: 'Map', icon: Map },
@@ -66,6 +69,18 @@ export default function Navbar({
 
         {/* Action Controls */}
         <div className="topbar-actions">
+          {/* Admin Mode Toggle */}
+          <button
+            type="button"
+            className={`admin-toggle-nav-btn ${isAdminMode ? 'active' : ''}`}
+            onClick={onToggleAdminMode}
+            aria-label={isAdminMode ? 'Exit Admin Mode' : 'Enter Admin Mode'}
+            title={isAdminMode ? 'Exit Admin Mode' : 'Enter Admin Mode (Add & Edit Nodes)'}
+          >
+            <ShieldCheck size={16} aria-hidden="true" />
+            <span className="admin-toggle-text">{isAdminMode ? 'Admin Active' : 'Admin'}</span>
+          </button>
+
           <button
             type="button"
             className="theme-toggle-btn"

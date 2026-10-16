@@ -9,7 +9,8 @@ import {
   CornerUpRight,
   Footprints,
   Share2,
-  Check
+  Check,
+  Edit3
 } from 'lucide-react';
 import { findShortestPath } from '../data/nodesData';
 import './PlaceCard.css';
@@ -19,7 +20,11 @@ export default function PlaceCard({
   userLocationId = 'PointA',
   onClose, 
   onGetDirections, 
-  onStartHere 
+  onStartHere,
+  isAdminMode = false,
+  onEditPlace = null,
+  dynamicNodes = null,
+  dynamicEdges = null,
 }) {
   const cardRef = useRef(null);
   const [copied, setCopied] = useState(false);
@@ -37,7 +42,7 @@ export default function PlaceCard({
   // Estimated walking distance and time from user location
   const walkInfo = useMemo(() => {
     if (!place || !userLocationId || place.id === userLocationId) return null;
-    const path = findShortestPath(userLocationId, place.id);
+    const path = findShortestPath(userLocationId, place.id, { dynamicNodes, dynamicEdges });
     if (!path || path.length < 2) return null;
     let dist = 0;
     for (let i = 0; i < path.length - 1; i++) {
@@ -46,7 +51,7 @@ export default function PlaceCard({
     const meters = Math.max(25, Math.round(dist * 1100));
     const mins = Math.max(1, Math.round(meters / 75));
     return { meters, mins };
-  }, [place, userLocationId]);
+  }, [place, userLocationId, dynamicNodes, dynamicEdges]);
 
   const handleCopy = () => {
     if (!place) return;
@@ -176,6 +181,20 @@ export default function PlaceCard({
             <CornerUpRight size={18} aria-hidden="true" />
             <span>Start here</span>
           </button>
+
+          {isAdminMode && onEditPlace && (
+            <button
+              type="button"
+              className="place-btn-secondary"
+              onClick={() => onEditPlace(place)}
+              aria-label={`Edit ${place.name} in Admin Mode`}
+              title="Edit node properties, rename, or adjust walkways"
+              style={{ color: '#1A73E8', borderColor: '#1A73E8' }}
+            >
+              <Edit3 size={16} aria-hidden="true" />
+              <span>Edit Place</span>
+            </button>
+          )}
         </div>
       </div>
     </div>

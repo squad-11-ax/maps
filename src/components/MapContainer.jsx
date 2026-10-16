@@ -5,6 +5,8 @@ import PlaceCard from './PlaceCard';
 import NavigationBanner from './NavigationBanner';
 
 export default function MapContainer({
+  nodes = [],
+  edges = [],
   routePlanner = [],
   currentStepIndex = 0,
   startNodeId = null,
@@ -32,6 +34,10 @@ export default function MapContainer({
   onNextStep,
   onPrevStep,
   onExitNav,
+  isAdminMode = false,
+  isPickingLocation = false,
+  onPickCoordinates = null,
+  onAdminEditNode = null,
 }) {
   const localControlsRef = useRef(null);
 
@@ -54,6 +60,7 @@ export default function MapContainer({
     >
       {/* 3D WebGL Canvas Layer */}
       <MapCanvas
+        nodes={nodes}
         routePlanner={routePlanner}
         currentStepIndex={currentStepIndex}
         startNodeId={startNodeId}
@@ -66,6 +73,10 @@ export default function MapContainer({
         onCameraHeadingChange={onCameraHeadingChange}
         isDarkMode={isDarkMode}
         onRegisterControls={handleRegisterControls}
+        isAdminMode={isAdminMode}
+        isPickingLocation={isPickingLocation}
+        onPickCoordinates={onPickCoordinates}
+        onAdminEditNode={onAdminEditNode}
       />
 
       {/* Floating Vertical Map Controls (Bottom-Right) */}
@@ -90,6 +101,10 @@ export default function MapContainer({
           onClose={onClosePlace}
           onGetDirections={onGetDirections}
           onStartHere={onStartHere}
+          isAdminMode={isAdminMode}
+          onEditPlace={onAdminEditNode}
+          dynamicNodes={nodes}
+          dynamicEdges={edges}
         />
       )}
 

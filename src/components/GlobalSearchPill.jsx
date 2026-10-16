@@ -30,6 +30,7 @@ export default function GlobalSearchPill({
   onSelectPlace, 
   onOpenDirections,
   onSelectCategory,
+  nodes = [],
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -60,11 +61,13 @@ export default function GlobalSearchPill({
     });
   };
 
+  const allPlaces = useMemo(() => (nodes && nodes.length > 0 ? nodes : NODES), [nodes]);
+
   // Fuzzy match algorithm matching name, blockCode, subtitle, and aliases
   const searchResults = useMemo(() => {
     const q = query.trim().toLowerCase();
     
-    return NODES.filter((place) => {
+    return allPlaces.filter((place) => {
       // Category filter
       if (activeCategory && place.category !== activeCategory) {
         return false;
@@ -91,7 +94,7 @@ export default function GlobalSearchPill({
 
       return false;
     }).slice(0, 8);
-  }, [query, activeCategory]);
+  }, [allPlaces, query, activeCategory]);
 
   // Click outside listener
   useEffect(() => {
@@ -113,7 +116,7 @@ export default function GlobalSearchPill({
   };
 
   const handleRecentClick = (recentName) => {
-    const found = NODES.find(n => n.name.toLowerCase() === recentName.toLowerCase() || n.shortName?.toLowerCase() === recentName.toLowerCase());
+    const found = allPlaces.find(n => n.name.toLowerCase() === recentName.toLowerCase() || n.shortName?.toLowerCase() === recentName.toLowerCase());
     if (found) {
       handleSelect(found);
     } else {
