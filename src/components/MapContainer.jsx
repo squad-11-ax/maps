@@ -1,4 +1,4 @@
-import React from 'react';
+import { useRef, useCallback } from 'react';
 import MapCanvas from './MapCanvas';
 import MapControls from './MapControls';
 import PlaceCard from './PlaceCard';
@@ -21,7 +21,7 @@ export default function MapContainer({
   cameraHeading = 0,
   onCameraHeadingChange,
   isDarkMode = false,
-  canvasControlRef = null,
+  onRegisterControls = null,
   isNavigating = false,
   currentStep = null,
   nextStep = null,
@@ -30,6 +30,15 @@ export default function MapContainer({
   onPrevStep,
   onExitNav,
 }) {
+  const localControlsRef = useRef(null);
+
+  const handleRegisterControls = useCallback((api) => {
+    localControlsRef.current = api;
+    if (onRegisterControls) {
+      onRegisterControls(api);
+    }
+  }, [onRegisterControls]);
+
   return (
     <div
       style={{
@@ -52,18 +61,18 @@ export default function MapContainer({
         showPOIs={showPOIs}
         onCameraHeadingChange={onCameraHeadingChange}
         isDarkMode={isDarkMode}
-        canvasControlRef={canvasControlRef}
+        onRegisterControls={handleRegisterControls}
       />
 
       {/* Floating Vertical Map Controls (Bottom-Right) */}
       <MapControls
-        onZoomIn={() => canvasControlRef?.current?.zoomIn()}
-        onZoomOut={() => canvasControlRef?.current?.zoomOut()}
-        onResetNorth={() => canvasControlRef?.current?.resetNorth()}
+        onZoomIn={() => localControlsRef.current?.zoomIn()}
+        onZoomOut={() => localControlsRef.current?.zoomOut()}
+        onResetNorth={() => localControlsRef.current?.resetNorth()}
         cameraRotation={cameraHeading}
         is3D={is3D}
         onToggle3D={onToggle3D}
-        onLocateMe={() => canvasControlRef?.current?.locateMe()}
+        onLocateMe={() => localControlsRef.current?.locateMe()}
         showPOIs={showPOIs}
         onTogglePOIs={onTogglePOIs}
       />

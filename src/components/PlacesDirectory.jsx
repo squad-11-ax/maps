@@ -1,8 +1,7 @@
-import React, { useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { NODES, CATEGORIES } from '../data/nodesData';
 import { 
   Building2, 
-  MapPin, 
   Navigation, 
   Clock, 
   Accessibility, 

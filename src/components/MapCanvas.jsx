@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState, useCallback } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { Line2 } from 'three/addons/lines/Line2.js';
@@ -14,9 +14,7 @@ import {
   DoorOpen, 
   Bath, 
   BookOpen, 
-  Building2,
-  Navigation,
-  Footprints
+  Building2
 } from 'lucide-react';
 import './MapOverlay.css';
 
@@ -33,7 +31,7 @@ export default function MapCanvas({
   showPOIs = true,
   onCameraHeadingChange,
   isDarkMode = false,
-  canvasControlRef = null,
+  onRegisterControls = null,
 }) {
   const mountRef = useRef(null);
   const engineRef = useRef({
@@ -263,10 +261,17 @@ export default function MapCanvas({
           camera.position.add(camera.position.clone().sub(controls.target).multiplyScalar(0.15));
           break;
         case 'r':
-        case 'R':
-          // Reset north
-          resetNorth();
+        case 'R': {
+          const currentDist = camera.position.distanceTo(controls.target);
+          const targetPos = new THREE.Vector3(
+            controls.target.x,
+            controls.target.y + (currentDist * Math.sin(controls.getPolarAngle())),
+            controls.target.z + (currentDist * Math.cos(controls.getPolarAngle()))
+          );
+          camera.position.copy(targetPos);
+          controls.update();
           break;
+        }
         default:
           break;
       }
@@ -406,21 +411,8 @@ export default function MapCanvas({
     };
   }, [isDarkMode, prefersReducedMotion]);
 
-  // Helper: Reset North
-  const resetNorth = useCallback(() => {
-    const { camera, controls } = engineRef.current;
-    if (!camera || !controls) return;
-    const currentDist = camera.position.distanceTo(controls.target);
-    const targetPos = new THREE.Vector3(
-      controls.target.x,
-      controls.target.y + (currentDist * Math.sin(controls.getPolarAngle())),
-      controls.target.z + (currentDist * Math.cos(controls.getPolarAngle()))
-    );
-    flyTo(targetPos, controls.target.clone(), 500);
-  }, []);
-
   // Helper: Smooth camera flyTo
-  const flyTo = useCallback((targetPos, targetControlsTarget, duration = 700) => {
+  const flyTo = (targetPos, targetControlsTarget, duration = 700) => {
     const { camera, controls } = engineRef.current;
     if (!camera || !controls) return;
 
@@ -437,7 +429,20 @@ export default function MapCanvas({
     engineRef.current.targetControlsTarget = targetControlsTarget.clone();
     engineRef.current.flyDuration = duration;
     engineRef.current.flyAnimationStart = performance.now();
-  }, [prefersReducedMotion]);
+  };
+
+  // Helper: Reset North
+  const resetNorth = () => {
+    const { camera, controls } = engineRef.current;
+    if (!camera || !controls) return;
+    const currentDist = camera.position.distanceTo(controls.target);
+    const targetPos = new THREE.Vector3(
+      controls.target.x,
+      controls.target.y + (currentDist * Math.sin(controls.getPolarAngle())),
+      controls.target.z + (currentDist * Math.cos(controls.getPolarAngle()))
+    );
+    flyTo(targetPos, controls.target.clone(), 500);
+  };
 
   // Toggle 2D / 3D tilt
   useEffect(() => {
@@ -467,8 +472,8 @@ export default function MapCanvas({
 
   //! EXPOSE IMPERATIVE CONTROLS TO PARENT
   useEffect(() => {
-    if (!canvasControlRef) return;
-    canvasControlRef.current = {
+    if (!onRegisterControls) return;
+    onRegisterControls({
       zoomIn: () => {
         const { camera, controls } = engineRef.current;
         if (!camera || !controls) return;
@@ -497,8 +502,8 @@ export default function MapCanvas({
         const targetPos = new THREE.Vector3(worldPos.x, worldPos.y + 20, worldPos.z + 18);
         flyTo(targetPos, worldPos, 700);
       },
-    };
-  }, [canvasControlRef, flyTo, resetNorth]);
+    });
+  }, [onRegisterControls, flyTo, resetNorth]);
 
   //! RENDER CONSTANT SCREEN-SPACE ROUTE (Three.js Line2)
   useEffect(() => {

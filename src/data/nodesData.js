@@ -698,7 +698,6 @@ export function generateTurnByTurnSteps(nodeList) {
   }
 
   const steps = [];
-  let cumulativeDist = 0;
 
   for (let i = 0; i < nodeList.length; i++) {
     const curr = nodeList[i];
@@ -721,7 +720,6 @@ export function generateTurnByTurnSteps(nodeList) {
     // Approximate meters based on map scale (1 unit ~ 1200 meters)
     const legDistUnits = getDistance(prev, curr);
     const legMeters = Math.max(15, Math.round(legDistUnits * 1100));
-    cumulativeDist += legMeters;
     const legSeconds = Math.round(legMeters / 1.3); // ~1.3 m/s walking speed
 
     if (i === nodeList.length - 1) {

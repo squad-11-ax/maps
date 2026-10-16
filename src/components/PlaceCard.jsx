@@ -1,14 +1,12 @@
-import React, { useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { 
   X, 
   Navigation, 
-  MapPin, 
   Clock, 
   Building2, 
   Layers, 
   Accessibility, 
-  CornerUpRight,
-  Share2
+  CornerUpRight
 } from 'lucide-react';
 import './PlaceCard.css';
 

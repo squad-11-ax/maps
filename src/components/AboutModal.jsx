@@ -1,5 +1,5 @@
-import React, { useEffect, useRef } from 'react';
-import { X, Navigation, Keyboard, CheckCircle2, ShieldCheck } from 'lucide-react';
+import { useEffect, useRef } from 'react';
+import { X, Navigation, Keyboard, ShieldCheck } from 'lucide-react';
 import './AboutModal.css';
 
 export default function AboutModal({ isOpen, onClose }) {

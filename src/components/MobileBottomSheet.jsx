@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import './MobileBottomSheet.css';
 
 export default function MobileBottomSheet({
@@ -8,14 +8,15 @@ export default function MobileBottomSheet({
   onSnapChange
 }) {
   const [snapPoint, setSnapPoint] = useState(initialSnap);
+  const [prevInitialSnap, setPrevInitialSnap] = useState(initialSnap);
+  if (initialSnap !== prevInitialSnap) {
+    setPrevInitialSnap(initialSnap);
+    setSnapPoint(initialSnap);
+  }
+
   const sheetRef = useRef(null);
   const dragStartY = useRef(null);
   const currentTranslateY = useRef(0);
-
-  // Sync initial snap
-  useEffect(() => {
-    setSnapPoint(initialSnap);
-  }, [initialSnap]);
 
   const snapClasses = {
     peek: 'snap-peek',

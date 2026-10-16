@@ -1,10 +1,8 @@
-import React from 'react';
 import { 
   ArrowUp, 
   ArrowLeft, 
   ArrowRight, 
   MapPin, 
-  Footprints, 
   X, 
   ChevronRight, 
   ChevronLeft 

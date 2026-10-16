@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import Navbar from './components/Navbar';
 import MapContainer from './components/MapContainer';
 import RoutePlannerSidebar from './components/RoutePlannerSidebar';
@@ -71,9 +71,12 @@ export default function App() {
   }, [routeSteps]);
 
   // Reset current step when route changes
-  useEffect(() => {
+  const routeKey = `${startNodeId}-${endNodeId}-${stepFreeOnly}`;
+  const [prevRouteKey, setPrevRouteKey] = useState(routeKey);
+  if (routeKey !== prevRouteKey) {
+    setPrevRouteKey(routeKey);
     setCurrentStepIndex(0);
-  }, [startNodeId, endNodeId, stepFreeOnly]);
+  }
 
   // Current and Next Step for Live Navigation
   const currentStep = routeSteps[currentStepIndex] || null;
@@ -199,7 +202,7 @@ export default function App() {
             cameraHeading={cameraHeading}
             onCameraHeadingChange={setCameraHeading}
             isDarkMode={isDarkMode}
-            canvasControlRef={canvasControlRef}
+            onRegisterControls={(api) => { canvasControlRef.current = api; }}
             isNavigating={isNavigating}
             currentStep={currentStep}
             nextStep={nextStep}

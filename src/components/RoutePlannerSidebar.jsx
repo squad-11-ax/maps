@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { 
   ArrowUpDown, 
   X, 
@@ -6,15 +6,12 @@ import {
   MapPin, 
   Accessibility, 
   Footprints, 
-  CheckCircle2, 
   ArrowUp, 
   ArrowLeft, 
   ArrowRight, 
-  CornerUpRight,
-  Play,
-  RotateCcw,
-  Search,
-  Check
+  Play, 
+  RotateCcw, 
+  Check 
 } from 'lucide-react';
 import { NODES } from '../data/nodesData';
 import './RoutePlannerSidebar.css';
@@ -38,28 +35,29 @@ export default function RoutePlannerSidebar({
   onCloseDirections
 }) {
   const [activeInput, setActiveInput] = useState(null); // 'start' | 'dest' | null
-  const [startQuery, setStartQuery] = useState('');
-  const [destQuery, setDestQuery] = useState('');
   const sidebarRef = useRef(null);
 
   // Derived selected nodes
   const startNode = useMemo(() => NODES.find(n => n.id === startNodeId), [startNodeId]);
   const endNode = useMemo(() => NODES.find(n => n.id === endNodeId), [endNodeId]);
 
-  // Sync inputs with selected nodes
-  useEffect(() => {
-    if (startNodeId === 'user_location') {
-      setStartQuery('Your location');
-    } else if (startNode) {
-      setStartQuery(startNode.name);
-    }
-  }, [startNode, startNodeId]);
+  // Adjust query strings during render when props change (React 19 pattern)
+  const [prevStartNodeId, setPrevStartNodeId] = useState(startNodeId);
+  const [prevEndNodeId, setPrevEndNodeId] = useState(endNodeId);
+  const [startQuery, setStartQuery] = useState(
+    startNodeId === 'user_location' ? 'Your location' : startNode ? startNode.name : ''
+  );
+  const [destQuery, setDestQuery] = useState(endNode ? endNode.name : '');
 
-  useEffect(() => {
-    if (endNode) {
-      setDestQuery(endNode.name);
-    }
-  }, [endNode]);
+  if (startNodeId !== prevStartNodeId) {
+    setPrevStartNodeId(startNodeId);
+    setStartQuery(startNodeId === 'user_location' ? 'Your location' : startNode ? startNode.name : '');
+  }
+
+  if (endNodeId !== prevEndNodeId) {
+    setPrevEndNodeId(endNodeId);
+    setDestQuery(endNode ? endNode.name : '');
+  }
 
   // Close dropdown on click outside
   useEffect(() => {

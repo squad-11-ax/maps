@@ -1,13 +1,10 @@
-import React from 'react';
 import { 
   Map, 
   Navigation, 
   Building2, 
   Info, 
   Sun, 
-  Moon, 
-  Layers,
-  Sparkles
+  Moon 
 } from 'lucide-react';
 import '../Navbar.css';
 

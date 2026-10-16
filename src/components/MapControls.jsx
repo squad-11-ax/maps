@@ -1,12 +1,9 @@
-import React from 'react';
 import { 
   Plus, 
   Minus, 
   Compass, 
   Layers, 
-  Crosshair, 
-  Eye, 
-  Maximize2 
+  Crosshair 
 } from 'lucide-react';
 import './MapControls.css';
 

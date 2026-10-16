@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { 
   Search, 
   X, 
@@ -11,8 +11,6 @@ import {
   Car, 
   DoorOpen, 
   Bath, 
-  BookOpen,
-  Building,
   Navigation
 } from 'lucide-react';
 import { NODES } from '../data/nodesData';
@@ -31,7 +29,6 @@ const CATEGORY_CHIPS = [
 export default function GlobalSearchPill({ 
   onSelectPlace, 
   onOpenDirections,
-  selectedPlace = null 
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState('');
