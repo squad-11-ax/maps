@@ -1,120 +1,219 @@
-.navbar {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end; /* Align right */
-  padding: 12px 24px;
-  background: transparent; /* fully transparent container */
-  gap: 12px;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  
-  /* Positions the navbar floating on top */
+/* ==========================================================================
+   NAVBAR & SHELL NAVIGATION STYLING
+   Slim Desktop Top App Bar & Mobile Bottom Tab Bar
+   ========================================================================== */
+
+/* --- Desktop Topbar --- */
+.app-topbar {
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
-  z-index: 1000;
-  pointer-events: none; /* Let clicks pass through empty areas */
+  height: var(--topbar-height);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--space-4);
+  z-index: 100;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-sizing: border-box;
 }
 
-/* ── Floating Pill Base ── */
-.nav-float-item, .nav-float-group, .navbar-toggle {
-  pointer-events: auto; /* Re-enable clicks for items */
+.topbar-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  user-select: none;
 }
 
-.nav-float-item {
+.topbar-logo-badge {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-sm);
+  background: var(--route);
+  color: var(--text-inverse);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 6px rgba(26, 115, 232, 0.35);
+}
+
+.topbar-logo-icon {
+  transform: rotate(-15deg);
+}
+
+.topbar-title-group {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.topbar-title {
+  font-size: var(--text-base);
+  font-weight: var(--font-semibold);
+  color: var(--text);
+  letter-spacing: -0.2px;
+}
+
+.topbar-badge {
+  font-size: var(--text-xs);
+  font-weight: var(--font-medium);
+  padding: 2px 6px;
+  background: var(--surface-2);
+  color: var(--text-2);
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border);
+}
+
+/* --- Desktop Nav Tabs --- */
+.desktop-nav-tabs {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 100%;
+}
+
+.topbar-tab-btn {
+  position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  background: rgba(255, 255, 255, 0.45); 
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.6); 
-  border-radius: 24px;
-  padding: 8px 16px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06),
-              0 1px 2px rgba(0, 0, 0, 0.04);
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  cursor: pointer;
-  white-space: nowrap;
-  font-size: 0.88rem;
-  font-weight: 500;
-  color: #1f2937;
+  gap: var(--space-2);
+  height: 40px;
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-pill);
+  color: var(--text-2);
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  transition: all var(--motion-fast);
+  background: transparent;
   text-decoration: none;
 }
 
-.nav-float-item:hover {
-  background: rgba(255, 255, 255, 0.65);
-  border-color: rgba(255, 255, 255, 0.9);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
-  transform: translateY(-2px);
+.topbar-tab-btn:hover {
+  background: var(--surface-2);
+  color: var(--text);
 }
 
-/* ── Nav link group ── */
-.nav-float-group {
+/* Active tab state - HIGHEST LEGIBILITY (>=4.5:1 contrast) */
+.topbar-tab-btn.active {
+  background: var(--surface-2);
+  color: var(--route);
+  font-weight: var(--font-semibold);
+}
+
+.tab-active-indicator {
+  position: absolute;
+  bottom: -8px;
+  left: 20%;
+  right: 20%;
+  height: 3px;
+  background: var(--route);
+  border-radius: 3px 3px 0 0;
+}
+
+/* --- Topbar Action Buttons --- */
+.topbar-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
-/* ── Active Link Pill ── */
-.nav-link-pill.active {
-  background: rgba(26, 115, 232, 0.25);
-  border-color: rgba(26, 115, 232, 0.5);
-  color: #1557b0;
-  font-weight: 600;
-  box-shadow: 0 4px 16px rgba(26, 115, 232, 0.2);
+.theme-toggle-btn {
+  width: var(--touch-target-min);
+  height: var(--touch-target-min);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: var(--text-2);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  transition: all var(--motion-fast);
 }
 
-.nav-pill-icon {
-  font-size: 1rem;
+.theme-toggle-btn:hover {
+  background: var(--surface-3);
+  color: var(--text);
+  transform: translateY(-1px);
 }
 
-.nav-pill-label {
-  font-size: 0.85rem;
-}
-
-/* ── Mobile hamburger ── */
-.navbar-toggle {
+/* --- Mobile Bottom Bar --- */
+.mobile-bottom-bar {
   display: none;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: calc(var(--bottombar-height) + env(safe-area-inset-bottom, 0px));
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.06);
+  z-index: 100;
+  justify-content: space-around;
+  align-items: center;
+  box-sizing: border-box;
+}
+
+.mobile-tab-item {
+  flex: 1;
+  display: flex;
   flex-direction: column;
-  gap: 4px;
-  background: rgba(255, 255, 255, 0.6);
-  border: 1px solid rgba(255, 255, 255, 0.6);
-  border-radius: 12px;
-  padding: 8px 10px;
-  cursor: pointer;
-  box-shadow: 0 2px 6px rgba(60, 64, 67, 0.08);
+  align-items: center;
+  justify-content: center;
+  height: var(--bottombar-height);
+  min-height: var(--touch-target-min);
+  min-width: var(--touch-target-min);
+  color: var(--text-2);
+  text-decoration: none;
+  background: transparent;
+  gap: 2px;
+  transition: color var(--motion-fast);
+  padding: 4px 0;
+  -webkit-tap-highlight-color: transparent;
 }
 
-.navbar-toggle .bar {
-  display: block;
-  width: 20px;
-  height: 2px;
-  background: #5f6368;
-  border-radius: 1px;
-  transition: transform 0.2s ease;
+.mobile-tab-icon-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 28px;
+  border-radius: var(--radius-pill);
+  transition: all var(--motion-fast);
 }
 
-/* ── Responsive ── */
+.mobile-tab-label {
+  font-size: var(--text-xs);
+  font-weight: var(--font-medium);
+}
+
+/* Active Mobile State - crisp contrast & pill container */
+.mobile-tab-item.active {
+  color: var(--route);
+}
+
+.mobile-tab-item.active .mobile-tab-icon-wrap {
+  background: var(--active-surface);
+  color: var(--route);
+}
+
+.mobile-tab-item.active .mobile-tab-label {
+  font-weight: var(--font-semibold);
+  color: var(--route);
+}
+
+/* Responsive Breakpoints */
 @media (max-width: 768px) {
-  .nav-float-group {
+  .desktop-nav-tabs {
     display: none;
-    flex-direction: column;
-    position: absolute;
-    top: 60px;
-    right: 24px;
-    background: rgba(255, 255, 255, 0.8);
-    backdrop-filter: blur(16px);
-    border-radius: 12px;
-    padding: 12px;
-    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.15);
   }
-
-  .nav-float-group.active {
-    display: flex;
-  }
-
-  .navbar-toggle {
+  
+  .mobile-bottom-bar {
     display: flex;
   }
 }
