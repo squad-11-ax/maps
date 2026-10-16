@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState } from 'react';
+import { useRef, useEffect, useState, useCallback } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { Line2 } from 'three/addons/lines/Line2.js';
@@ -34,6 +34,31 @@ export default function MapCanvas({
   onRegisterControls = null,
 }) {
   const mountRef = useRef(null);
+
+  // Synchronized props ref to avoid stale closures in animate() loop
+  const propsRef = useRef({
+    startNodeId,
+    endNodeId,
+    selectedPlace,
+    routePlanner,
+    currentStepIndex,
+    onCameraHeadingChange,
+    is3D,
+    showPOIs,
+  });
+  useEffect(() => {
+    propsRef.current = {
+      startNodeId,
+      endNodeId,
+      selectedPlace,
+      routePlanner,
+      currentStepIndex,
+      onCameraHeadingChange,
+      is3D,
+      showPOIs,
+    };
+  });
+
   const engineRef = useRef({
     scene: null,
     camera: null,
@@ -42,10 +67,8 @@ export default function MapCanvas({
     mapToWorld: null,
     targetCameraPos: null,
     targetControlsTarget: null,
-    flyAnimationStart: null,
-    flyDuration: 700,
-    flyStartPos: null,
-    flyStartTarget: null,
+    userIsInteracting: false,
+    hasInitializedCamera: false,
     lineCasing: null,
     lineActive: null,
     lineWalked: null,
@@ -127,9 +150,13 @@ export default function MapCanvas({
     controls.dampingFactor = 0.08;
     controls.maxPolarAngle = (65 * Math.PI) / 180; // Clamped to 65° max pitch
     controls.minPolarAngle = 0; // Overhead 0°
-    controls.minDistance = 6;
+    controls.minDistance = 1; // Allows distance = 3, elevation = 2 (hypot ~3.6)
     controls.maxDistance = 140;
     controls.target.set(0, 0, 0);
+
+    controls.addEventListener('start', () => {
+      engineRef.current.userIsInteracting = true;
+    });
 
     //! LIGHTING
     const ambientLight = new THREE.AmbientLight(0xffffff, 1.4);
@@ -282,34 +309,17 @@ export default function MapCanvas({
     let animationId;
     let lastHeading = null;
 
-    const animate = (timestamp) => {
+    const animate = () => {
       animationId = requestAnimationFrame(animate);
 
-      // Camera FlyTo Easing
-      const { 
-        flyAnimationStart, 
-        flyDuration, 
-        flyStartPos, 
-        flyStartTarget, 
-        targetCameraPos, 
-        targetControlsTarget 
-      } = engineRef.current;
-
-      if (flyAnimationStart && targetCameraPos && targetControlsTarget) {
-        const elapsed = timestamp - flyAnimationStart;
-        const progress = Math.min(elapsed / flyDuration, 1);
-        // Easing: cubic-bezier(0.25, 0.1, 0.25, 1) easeInOutCubic
-        const ease = progress < 0.5 
-          ? 4 * progress * progress * progress 
-          : 1 - Math.pow(-2 * progress + 2, 3) / 2;
-
-        if (prefersReducedMotion || progress >= 1) {
-          camera.position.copy(targetCameraPos);
-          controls.target.copy(targetControlsTarget);
-          engineRef.current.flyAnimationStart = null;
+      // Camera Follow Smooth Lerp (5% per frame exponential decay)
+      if (!engineRef.current.userIsInteracting && engineRef.current?.targetCameraPos && engineRef.current?.targetControlsTarget) {
+        if (prefersReducedMotion) {
+          camera.position.copy(engineRef.current.targetCameraPos);
+          controls.target.copy(engineRef.current.targetControlsTarget);
         } else {
-          camera.position.lerpVectors(flyStartPos, targetCameraPos, ease);
-          controls.target.lerpVectors(flyStartTarget, targetControlsTarget, ease);
+          camera.position.lerp(engineRef.current.targetCameraPos, 0.05);
+          controls.target.lerp(engineRef.current.targetControlsTarget, 0.05);
         }
       }
 
@@ -322,9 +332,10 @@ export default function MapCanvas({
 
       // Report camera azimuth heading to controls
       const azimuth = controls.getAzimuthalAngle();
-      if (onCameraHeadingChange && Math.abs(azimuth - lastHeading) > 0.02) {
+      const { onCameraHeadingChange: cbHeading } = propsRef.current;
+      if (cbHeading && Math.abs(azimuth - lastHeading) > 0.02) {
         lastHeading = azimuth;
-        onCameraHeadingChange(azimuth);
+        cbHeading(azimuth);
       }
 
       // Compute projected screen markers and collision culling
@@ -333,14 +344,22 @@ export default function MapCanvas({
         const camPos = camera.position;
         const camDist = camPos.distanceTo(controls.target);
 
-        // Zoom tier based on camera distance
-        // close (< 45), mid (45 - 85), far (> 85)
+        // Zoom tier based on camera distance: close (< 45), mid (45 - 85), far (> 85)
         const zoomTier = camDist < 45 ? 'close' : camDist < 85 ? 'mid' : 'far';
 
         const mapToWorld = engineRef.current.mapToWorld;
         const halfW = width / 2;
         const halfH = height / 2;
 
+        const {
+          startNodeId: curStart,
+          endNodeId: curEnd,
+          selectedPlace: curSelected,
+          routePlanner: curRoute,
+          currentStepIndex: curStepIdx,
+        } = propsRef.current;
+
+        // 1. Campus POI & Building Markers
         NODES.forEach((node) => {
           const worldPos = mapToWorld(node.x, node.y);
           const screenVec = worldPos.clone().project(camera);
@@ -350,10 +369,9 @@ export default function MapCanvas({
             const screenX = (screenVec.x * halfW) + halfW;
             const screenY = (-(screenVec.y * halfH)) + halfH;
 
-            const isStart = node.id === startNodeId;
-            const isDest = node.id === endNodeId;
-            const isSelected = selectedPlace?.id === node.id;
-            const isUserLoc = node.id === 'PointA';
+            const isStart = node.id === curStart;
+            const isDest = node.id === curEnd;
+            const isSelected = curSelected?.id === node.id;
 
             markers.push({
               node,
@@ -363,11 +381,70 @@ export default function MapCanvas({
               isStart,
               isDest,
               isSelected,
-              isUserLoc,
-              priority: isDest ? 100 : isStart ? 90 : isSelected ? 80 : isUserLoc ? 70 : 10,
+              isUserAvatar: false,
+              priority: isDest ? 100 : isStart ? 90 : isSelected ? 80 : 10,
             });
           }
         });
+
+        // 2. User Live Location Marker (advances step-by-step with camera follow)
+        let userU = null;
+        let userV = null;
+        let nextU = null;
+        let nextV = null;
+
+        if (curRoute && curRoute.length > 0 && curRoute[curStepIdx]) {
+          const currentStepNode = curRoute[curStepIdx];
+          userU = currentStepNode.lat;
+          userV = currentStepNode.lng;
+          const nextStepNode = curRoute[curStepIdx + 1];
+          if (nextStepNode) {
+            nextU = nextStepNode.lat;
+            nextV = nextStepNode.lng;
+          }
+        } else {
+          const startNode = NODES.find((n) => n.id === (curStart || 'PointA'));
+          if (startNode) {
+            userU = startNode.x;
+            userV = startNode.y;
+          }
+        }
+
+        if (userU !== null && userV !== null) {
+          const userWorld = mapToWorld(userU, userV);
+          const userVec = userWorld.clone().project(camera);
+
+          if (userVec.z < 1.0 && Math.abs(userVec.x) <= 1.25 && Math.abs(userVec.y) <= 1.25) {
+            const uScreenX = (userVec.x * halfW) + halfW;
+            const uScreenY = (-(userVec.y * halfH)) + halfH;
+
+            let headingDeg = null;
+            if (nextU !== null && nextV !== null) {
+              const nextWorld = mapToWorld(nextU, nextV);
+              const nextVec = nextWorld.clone().project(camera);
+              const nScreenX = (nextVec.x * halfW) + halfW;
+              const nScreenY = (-(nextVec.y * halfH)) + halfH;
+              headingDeg = Math.atan2(nScreenY - uScreenY, nScreenX - uScreenX) * (180 / Math.PI) + 90;
+            }
+
+            markers.push({
+              node: {
+                id: '__user_avatar__',
+                name: 'Your Current Location',
+                shortName: 'You',
+              },
+              screenX: uScreenX,
+              screenY: uScreenY,
+              zoomTier,
+              isStart: false,
+              isDest: false,
+              isSelected: false,
+              isUserAvatar: true,
+              headingDeg,
+              priority: 999, // Guaranteed top priority, never culled
+            });
+          }
+        }
 
         // Collision culling: sort by priority descending
         markers.sort((a, b) => b.priority - a.priority);
@@ -375,7 +452,7 @@ export default function MapCanvas({
         const minDistancePx = zoomTier === 'far' ? 44 : 32;
 
         for (const m of markers) {
-          // Guaranteed visible: start, destination, selected, user
+          // Guaranteed visible: user avatar, destination, start, selected
           if (m.priority >= 70) {
             culled.push(m);
             continue;
@@ -396,7 +473,7 @@ export default function MapCanvas({
         setProjectedMarkers(culled);
       }
     };
-    animate(0);
+    animate();
 
     // Clean up
     return () => {
@@ -411,11 +488,12 @@ export default function MapCanvas({
     };
   }, [isDarkMode, prefersReducedMotion]);
 
-  // Helper: Smooth camera flyTo
-  const flyTo = (targetPos, targetControlsTarget, duration = 700) => {
+  // Helper: Smooth camera flyTo / target retargeting
+  const flyTo = useCallback((targetPos, targetControlsTarget) => {
     const { camera, controls } = engineRef.current;
     if (!camera || !controls) return;
 
+    engineRef.current.userIsInteracting = false;
     if (prefersReducedMotion) {
       camera.position.copy(targetPos);
       controls.target.copy(targetControlsTarget);
@@ -423,16 +501,12 @@ export default function MapCanvas({
       return;
     }
 
-    engineRef.current.flyStartPos = camera.position.clone();
-    engineRef.current.flyStartTarget = controls.target.clone();
     engineRef.current.targetCameraPos = targetPos.clone();
     engineRef.current.targetControlsTarget = targetControlsTarget.clone();
-    engineRef.current.flyDuration = duration;
-    engineRef.current.flyAnimationStart = performance.now();
-  };
+  }, [prefersReducedMotion]);
 
   // Helper: Reset North
-  const resetNorth = () => {
+  const resetNorth = useCallback(() => {
     const { camera, controls } = engineRef.current;
     if (!camera || !controls) return;
     const currentDist = camera.position.distanceTo(controls.target);
@@ -441,13 +515,19 @@ export default function MapCanvas({
       controls.target.y + (currentDist * Math.sin(controls.getPolarAngle())),
       controls.target.z + (currentDist * Math.cos(controls.getPolarAngle()))
     );
-    flyTo(targetPos, controls.target.clone(), 500);
-  };
+    flyTo(targetPos, controls.target.clone());
+  }, [flyTo]);
 
   // Toggle 2D / 3D tilt
   useEffect(() => {
     const { camera, controls } = engineRef.current;
     if (!camera || !controls) return;
+    engineRef.current.userIsInteracting = false;
+
+    if (routePlanner && routePlanner.length > 0) {
+      // Re-focus handled by updateCamera effect
+      return;
+    }
 
     const currentDist = camera.position.distanceTo(controls.target) || 45;
     if (is3D) {
@@ -458,7 +538,7 @@ export default function MapCanvas({
         controls.target.y + currentDist * Math.cos(pitchRad),
         controls.target.z + currentDist * Math.sin(pitchRad)
       );
-      flyTo(targetPos, controls.target.clone(), 600);
+      flyTo(targetPos, controls.target.clone());
     } else {
       // 2D overhead: 0° pitch
       const targetPos = new THREE.Vector3(
@@ -466,9 +546,9 @@ export default function MapCanvas({
         controls.target.y + currentDist,
         controls.target.z + 0.001
       );
-      flyTo(targetPos, controls.target.clone(), 600);
+      flyTo(targetPos, controls.target.clone());
     }
-  }, [is3D, flyTo]);
+  }, [is3D, routePlanner, flyTo]);
 
   //! EXPOSE IMPERATIVE CONTROLS TO PARENT
   useEffect(() => {
@@ -478,32 +558,58 @@ export default function MapCanvas({
         const { camera, controls } = engineRef.current;
         if (!camera || !controls) return;
         const targetPos = camera.position.clone().lerp(controls.target, 0.25);
-        flyTo(targetPos, controls.target.clone(), 300);
+        flyTo(targetPos, controls.target.clone());
       },
       zoomOut: () => {
         const { camera, controls } = engineRef.current;
         if (!camera || !controls) return;
         const offset = camera.position.clone().sub(controls.target).multiplyScalar(1.25);
         const targetPos = controls.target.clone().add(offset);
-        flyTo(targetPos, controls.target.clone(), 300);
+        flyTo(targetPos, controls.target.clone());
       },
       resetNorth,
       locateMe: () => {
-        if (!engineRef.current.mapToWorld) return;
-        const userNode = NODES.find(n => n.id === 'PointA');
-        if (!userNode) return;
-        const worldPos = engineRef.current.mapToWorld(userNode.x, userNode.y);
-        const targetPos = new THREE.Vector3(worldPos.x, worldPos.y + 18, worldPos.z + 16);
-        flyTo(targetPos, worldPos, 700);
+        engineRef.current.userIsInteracting = false;
+        if (!engineRef.current?.mapToWorld) return;
+        if (routePlanner && routePlanner.length > 0 && routePlanner[currentStepIndex]) {
+          const step = routePlanner[currentStepIndex];
+          const targetPoint = engineRef.current.mapToWorld(step.lat, step.lng);
+          const nextStep = routePlanner[currentStepIndex + 1];
+          let cameraPos;
+          if (!is3D) {
+            cameraPos = new THREE.Vector3(targetPoint.x, targetPoint.y + 14, targetPoint.z + 0.001);
+          } else if (nextStep) {
+            const nextNode = engineRef.current.mapToWorld(nextStep.lat, nextStep.lng);
+            const dx = nextNode.x - targetPoint.x;
+            const dz = nextNode.z - targetPoint.z;
+            const length = Math.hypot(dx, dz) || 1;
+            const distance = 3;
+            const elevation = 2;
+            cameraPos = new THREE.Vector3(
+              targetPoint.x - distance * (dx / length),
+              targetPoint.y + elevation,
+              targetPoint.z - distance * (dz / length)
+            );
+          } else {
+            cameraPos = new THREE.Vector3(targetPoint.x, targetPoint.y + 10, targetPoint.z + 15);
+          }
+          flyTo(cameraPos, targetPoint);
+        } else {
+          const userNode = NODES.find(n => n.id === (startNodeId || 'PointA'));
+          if (!userNode) return;
+          const worldPos = engineRef.current.mapToWorld(userNode.x, userNode.y);
+          const targetPos = new THREE.Vector3(worldPos.x, worldPos.y + 18, worldPos.z + 16);
+          flyTo(targetPos, worldPos);
+        }
       },
       flyToPlace: (place) => {
         if (!engineRef.current.mapToWorld || !place) return;
         const worldPos = engineRef.current.mapToWorld(place.x, place.y);
         const targetPos = new THREE.Vector3(worldPos.x, worldPos.y + 20, worldPos.z + 18);
-        flyTo(targetPos, worldPos, 700);
+        flyTo(targetPos, worldPos);
       },
     });
-  }, [onRegisterControls, flyTo, resetNorth]);
+  }, [onRegisterControls, flyTo, resetNorth, routePlanner, currentStepIndex, is3D, startNodeId]);
 
   //! RENDER CONSTANT SCREEN-SPACE ROUTE (Three.js Line2)
   useEffect(() => {
@@ -611,35 +717,69 @@ export default function MapCanvas({
 
   //! AUTO-FIT CAMERA TO ROUTE OR FOCUS CURRENT STEP
   useEffect(() => {
-    if (!engineRef.current.mapToWorld || !routePlanner.length) return;
-    const { camera, controls, mapToWorld } = engineRef.current;
-    if (!camera || !controls) return;
+    const updateCamera = () => {
+      if (!engineRef.current?.mapToWorld || !routePlanner.length) return;
+      const { camera, controls, mapToWorld } = engineRef.current;
+      if (!camera || !controls) return;
 
-    const step = routePlanner[currentStepIndex];
-    if (!step) return;
+      const step = routePlanner[currentStepIndex];
+      if (!step) return;
 
-    const targetPoint = mapToWorld(step.lat, step.lng);
-    const nextStep = routePlanner[currentStepIndex + 1];
+      const targetPoint = mapToWorld(step.lat, step.lng);
+      const nextStep = routePlanner[currentStepIndex + 1];
 
-    let cameraPos;
-    if (nextStep) {
-      const nextNode = mapToWorld(nextStep.lat, nextStep.lng);
-      const dx = nextNode.x - targetPoint.x;
-      const dz = nextNode.z - targetPoint.z;
-      const length = Math.hypot(dx, dz) || 1;
-      const distance = 16;
-      const elevation = 14;
-      cameraPos = new THREE.Vector3(
-        targetPoint.x - distance * (dx / length),
-        targetPoint.y + elevation,
-        targetPoint.z - distance * (dz / length)
-      );
-    } else {
-      cameraPos = new THREE.Vector3(targetPoint.x, targetPoint.y + 18, targetPoint.z + 18);
-    }
+      let cameraPos;
+      if (!is3D) {
+        cameraPos = new THREE.Vector3(targetPoint.x, targetPoint.y + 14, targetPoint.z + 0.001);
+      } else if (nextStep) {
+        const nextNode = mapToWorld(nextStep.lat, nextStep.lng);
+        const dx = nextNode.x - targetPoint.x;
+        const dz = nextNode.z - targetPoint.z;
+        const length = Math.hypot(dx, dz) || 1;
+        const distance = 3;
+        const elevation = 2;
+        cameraPos = new THREE.Vector3(
+          targetPoint.x - distance * (dx / length),
+          targetPoint.y + elevation,
+          targetPoint.z - distance * (dz / length)
+        );
+      } else if (currentStepIndex > 0 && routePlanner[currentStepIndex - 1]) {
+        // At arrival: camera looks along approaching road toward destination building
+        const prevStep = routePlanner[currentStepIndex - 1];
+        const prevNode = mapToWorld(prevStep.lat, prevStep.lng);
+        const dx = targetPoint.x - prevNode.x;
+        const dz = targetPoint.z - prevNode.z;
+        const length = Math.hypot(dx, dz) || 1;
+        const distance = 4;
+        const elevation = 3;
+        cameraPos = new THREE.Vector3(
+          targetPoint.x - distance * (dx / length),
+          targetPoint.y + elevation,
+          targetPoint.z - distance * (dz / length)
+        );
+      } else {
+        cameraPos = new THREE.Vector3(targetPoint.x, targetPoint.y + 10, targetPoint.z + 15);
+      }
 
-    flyTo(cameraPos, targetPoint, 700);
-  }, [currentStepIndex, routePlanner, flyTo]);
+      engineRef.current.userIsInteracting = false;
+
+      // On initial camera initialization, snap directly without long initial drift
+      if (!engineRef.current.hasInitializedCamera) {
+        engineRef.current.hasInitializedCamera = true;
+        camera.position.copy(cameraPos);
+        controls.target.copy(targetPoint);
+        controls.update();
+        engineRef.current.targetCameraPos = cameraPos.clone();
+        engineRef.current.targetControlsTarget = targetPoint.clone();
+      } else {
+        flyTo(cameraPos, targetPoint);
+      }
+    };
+
+    updateCamera();
+    window.addEventListener('mapEngineReady', updateCamera);
+    return () => window.removeEventListener('mapEngineReady', updateCamera);
+  }, [currentStepIndex, routePlanner, is3D, flyTo]);
 
   return (
     <div style={{ width: '100%', height: '100%', position: 'relative', overflow: 'hidden' }}>
@@ -662,7 +802,7 @@ export default function MapCanvas({
       {/* Screen-Space Overlays: Constant Size Markers & Halo Labels */}
       <div className="map-overlay-layer" aria-hidden="false">
         {projectedMarkers.map((marker) => {
-          const { node, screenX, screenY, zoomTier, isStart, isDest, isSelected, isUserLoc } = marker;
+          const { node, screenX, screenY, zoomTier, isStart, isDest, isSelected, isUserAvatar, headingDeg } = marker;
 
           return (
             <div
@@ -673,33 +813,40 @@ export default function MapCanvas({
                 top: `${screenY}px`,
                 zIndex: marker.priority,
               }}
-              onClick={() => onSelectPlace(node)}
+              onClick={() => {
+                if (!isUserAvatar) onSelectPlace(node);
+              }}
               role="button"
-              tabIndex={0}
+              tabIndex={isUserAvatar ? -1 : 0}
               onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
+                if (!isUserAvatar && (e.key === 'Enter' || e.key === ' ')) {
                   e.preventDefault();
                   onSelectPlace(node);
                 }
               }}
-              aria-label={`${node.name}, ${node.category || ''}, ${node.blockCode || ''}`}
+              aria-label={isUserAvatar ? "Your current location" : `${node.name}, ${node.category || ''}, ${node.blockCode || ''}`}
             >
-              {/* User Location Marker */}
-              {isUserLoc && !isStart && !isDest && (
+              {/* User Location Avatar with Animated Pulse and Heading Cone */}
+              {isUserAvatar && (
                 <div className="marker-user" title="Your current location">
                   <div className="user-pulse-halo" />
-                  <div className="user-heading-cone" />
+                  {headingDeg !== null && (
+                    <div 
+                      className="user-heading-cone" 
+                      style={{ transform: `rotate(${headingDeg}deg)` }} 
+                    />
+                  )}
                   <div className="user-center-dot" />
                 </div>
               )}
 
               {/* Origin Marker */}
-              {isStart && (
+              {!isUserAvatar && isStart && (
                 <div className="marker-origin" title={`Starting point: ${node.name}`} />
               )}
 
               {/* Destination Marker */}
-              {isDest && (
+              {!isUserAvatar && isDest && (
                 <div className="marker-destination" title={`Destination: ${node.name}`}>
                   <svg viewBox="0 0 24 24" className="dest-pin-svg" aria-hidden="true">
                     <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" />
@@ -708,14 +855,14 @@ export default function MapCanvas({
               )}
 
               {/* Standard POI Marker */}
-              {!isStart && !isDest && !isUserLoc && showPOIs && (
+              {!isUserAvatar && !isStart && !isDest && showPOIs && (
                 <div className={`marker-poi category-${(node.category || 'other').toLowerCase()}`}>
                   {getCategoryIcon(node.category)}
                 </div>
               )}
 
               {/* 2px Halo Label: Reveals full name close up, code at mid zoom, always for destination */}
-              {(isDest || isStart || isSelected || zoomTier === 'close' || (zoomTier === 'mid' && node.blockCode)) && (
+              {!isUserAvatar && (isDest || isStart || isSelected || zoomTier === 'close' || (zoomTier === 'mid' && node.blockCode)) && (
                 <span className={`marker-label ${isDest ? 'destination-label' : ''} ${zoomTier === 'mid' && !isDest ? 'code-only' : ''}`}>
                   {isDest || isSelected || zoomTier === 'close'
                     ? (node.shortName || node.name)
