@@ -72,14 +72,8 @@
 }
 
 .a11y-badge {
-  background: #E6F4EA;
-  color: #137333;
-}
-
-body.dark-theme .a11y-badge,
-:root[data-theme="dark"] .a11y-badge {
-  background: rgba(129, 201, 149, 0.15);
-  color: #81C995;
+  background: var(--badge-success-bg);
+  color: var(--badge-success-text);
 }
 
 .place-card-close-btn {

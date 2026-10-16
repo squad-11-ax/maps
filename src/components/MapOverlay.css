@@ -122,13 +122,13 @@
   box-shadow: 0 4px 12px rgba(60, 64, 67, 0.4);
 }
 
-.marker-poi.category-food { color: #E37400; }
-.marker-poi.category-labs { color: #1A73E8; }
-.marker-poi.category-hostels { color: #9334E6; }
-.marker-poi.category-atm { color: #137333; }
-.marker-poi.category-parking { color: #5F6368; }
-.marker-poi.category-washrooms { color: #007B83; }
-.marker-poi.category-study { color: #7B1FA2; }
+.marker-poi.category-food { color: var(--poi-food); }
+.marker-poi.category-labs { color: var(--poi-labs); }
+.marker-poi.category-hostels { color: var(--poi-hostels); }
+.marker-poi.category-atm { color: var(--poi-atm); }
+.marker-poi.category-parking { color: var(--poi-parking); }
+.marker-poi.category-washrooms { color: var(--poi-washrooms); }
+.marker-poi.category-study { color: var(--poi-study); }
 
 /* --- Building Labels with 2px White Halo --- */
 .marker-label {

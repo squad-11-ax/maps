@@ -61,8 +61,8 @@
 }
 
 .directions-close-btn {
-  width: 36px;
-  height: 36px;
+  width: var(--touch-target-min);
+  height: var(--touch-target-min);
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -342,16 +342,10 @@
 .step-free-active-tag {
   font-size: var(--text-xs);
   font-weight: var(--font-semibold);
-  color: #137333;
-  background: #E6F4EA;
+  color: var(--badge-success-text);
+  background: var(--badge-success-bg);
   padding: 2px 8px;
   border-radius: var(--radius-pill);
-}
-
-body.dark-theme .step-free-active-tag,
-:root[data-theme="dark"] .step-free-active-tag {
-  color: #81C995;
-  background: rgba(129, 201, 149, 0.15);
 }
 
 /* Summary Bar */

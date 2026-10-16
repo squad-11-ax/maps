@@ -58,8 +58,8 @@
 }
 
 .directory-close-btn {
-  width: 36px;
-  height: 36px;
+  width: var(--touch-target-min);
+  height: var(--touch-target-min);
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -237,8 +237,8 @@
 }
 
 .item-a11y-tag {
-  color: #137333;
-  background: #E6F4EA;
+  color: var(--badge-success-text);
+  background: var(--badge-success-bg);
   padding: 1px 6px;
   border-radius: var(--radius-pill);
 }

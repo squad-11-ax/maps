@@ -66,8 +66,8 @@
 }
 
 .search-clear-btn {
-  width: 32px;
-  height: 32px;
+  width: var(--touch-target-min);
+  height: var(--touch-target-min);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -279,8 +279,8 @@
 }
 
 .quick-direct-btn {
-  width: 36px;
-  height: 36px;
+  width: var(--touch-target-min);
+  height: var(--touch-target-min);
   border-radius: 50%;
   background: var(--surface-2);
   color: var(--route);

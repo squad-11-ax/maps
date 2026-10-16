@@ -1,12 +1,13 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { NODES as DEFAULT_NODES } from '../data/nodesData';
+import { MapPin, Search, Check, X } from 'lucide-react';
 import '../DropdownSearch.css';
 
 export default function DropdownSearch({
   label,
   value,
   onChange,
-  placeholder = 'Search Google Maps...',
+  placeholder = 'Search campus places...',
   nodes = DEFAULT_NODES,
   type,
 }) {
@@ -99,13 +100,9 @@ export default function DropdownSearch({
               <span className="inner-dot"></span>
             </span>
           ) : isDest ? (
-            <span className="gm-pin-icon dest-pin" title="Destination">
-              📍
-            </span>
+            <MapPin size={18} className="dest-pin" />
           ) : (
-            <span className="gm-pin-icon search-pin" title="Search">
-              🔍
-            </span>
+            <Search size={18} className="search-pin" />
           )}
         </div>
 
@@ -130,7 +127,7 @@ export default function DropdownSearch({
             title="Clear search"
             aria-label="Clear input"
           >
-            ✕
+            <X size={14} />
           </button>
         )}
       </div>
@@ -164,16 +161,8 @@ export default function DropdownSearch({
                     onClick={() => handleSelect(item)}
                     className={`gm-result-item ${isSelected ? 'selected' : ''}`}
                   >
-                    <div
-                      className="gm-item-icon-wrapper"
-                      style={{
-                        backgroundColor: `${item.color || '#4285F4'}18`,
-                        borderColor: `${item.color || '#4285F4'}40`,
-                      }}
-                    >
-                      <span className="gm-item-emoji">
-                        {item.icon || '📍'}
-                      </span>
+                    <div className="gm-item-icon-wrapper">
+                      <MapPin size={16} />
                     </div>
 
                     <div className="gm-item-content">
@@ -191,16 +180,14 @@ export default function DropdownSearch({
                     </div>
 
                     {isSelected && (
-                      <span className="gm-item-check" title="Selected">
-                        ✓
-                      </span>
+                      <Check size={16} className="gm-item-check" />
                     )}
                   </li>
                 );
               })
             ) : (
               <li className="gm-no-results">
-                <div className="gm-no-results-icon">📍</div>
+                <Search size={24} className="gm-no-results-icon" />
                 <div className="gm-no-results-text">
                   No matching places found
                 </div>

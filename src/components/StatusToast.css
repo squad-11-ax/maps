@@ -33,21 +33,21 @@
 }
 
 .toast-offline {
-  background: #323232;
-  color: #FFFFFF;
-  border-color: #444444;
+  background: var(--text);
+  color: var(--surface);
+  border-color: var(--border);
 }
 
 .toast-error {
-  background: #FCE8E6;
+  background: var(--badge-danger-bg);
   color: var(--dest);
-  border-color: #FAD2CF;
+  border-color: var(--badge-danger-border);
 }
 
 .toast-success {
-  background: #E6F4EA;
-  color: #137333;
-  border-color: #CEEAD6;
+  background: var(--badge-success-bg);
+  color: var(--badge-success-text);
+  border-color: var(--badge-success-border);
 }
 
 .toast-dismiss-btn {
